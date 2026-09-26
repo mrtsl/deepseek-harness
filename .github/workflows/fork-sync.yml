@@ -1,0 +1,52 @@
+name: Fork - Sync upstream
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: fork-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'mrtsl/deepseek-harness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.FORK_SYNC_TOKEN || github.token }}
+      - name: Fast-forward master from DeepSeek
+        run: |
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch upstream master
+          git merge-base --is-ancestor HEAD upstream/master
+          git merge --ff-only upstream/master
+          git push origin HEAD:master
+      - name: Propose upstream changes for dev
+        env:
+          GH_TOKEN: ${{ secrets.FORK_SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ahead=$(gh api "repos/$GH_REPO/compare/dev...master" --jq '.ahead_by')
+          if [ "$ahead" = 0 ]; then
+            echo 'dev already contains master.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          existing=$(gh pr list --base dev --head master --state open --json url --jq '.[0].url // empty')
+          if [ -n "$existing" ]; then
+            echo "Existing sync PR: $existing" >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat > "$RUNNER_TEMP/sync-body.md" <<'BODY'
+          Merge upstream master into the personal dev branch, preserving personal commits.
+
+          Resolve any conflicts on a temporary branch based on dev, then merge master into that branch. Do not rewrite master or force-reset dev. Run the relevant checks before merging. Use a merge commit for this PR so Git retains the upstream ancestry.
+          BODY
+            gh pr create --base dev --head master --title 'chore: sync DeepSeek upstream into dev' --body-file "$RUNNER_TEMP/sync-body.md" >> "$GITHUB_STEP_SUMMARY"
+          fi

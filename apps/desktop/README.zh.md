@@ -285,6 +285,8 @@ Apple 工具使用 macOS 当前活动网络服务的 HTTP/HTTPS 代理。配置�
 
 ### 未签名 Windows 测试安装包
 
+个人 fork 可在 `.env.windows` 中设置 `DSH_DESKTOP_MANDATORY_UPDATE_DISABLED=1`，同时省略强制更新请求。此设置仅允许未签名 Windows 打包；签名构建仍需配置策略服务。同步与 GitHub Actions 打包步骤见[个人 fork 流程](../../.github/fork/README.zh.md)。
+
 在 Windows x64 上，使用完整的未签名打包命令进行本地安装测试：
 
 ```sh

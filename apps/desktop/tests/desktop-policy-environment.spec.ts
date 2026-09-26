@@ -13,6 +13,7 @@ it.each(['test', 'production'] as const)('selects the %s policy and authenticati
   expect(policy).toEqual({ origin, allowedPageOrigins: [origin],
     ...(deployment === 'test' ? { allowedAuthOrigins: ['https://login.example.com'] } : {}),
     authentication: deployment === 'test' ? 'feishu-test' : 'anonymous' })
+  if (policy === undefined) throw new Error('enabled deployment must retain its policy')
   expect(resolveDesktopPolicyConfig(policy)).toMatchObject(policy)
 })
 
@@ -52,4 +53,21 @@ it.each([{ unsigned: true }, { prepareOnly: true }, {}])('fails before signing/p
     expect(() => { validateDesktopPackageEnvironment({ DSH_DESKTOP_APP_ID: 'com.example.test' }, { platform, arch: 'x64' }, options) })
       .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
   }
+})
+
+
+it('omits policy requests for explicitly disabled personal builds', () => {
+  expect(resolveDesktopPolicyEnvironment({ DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: '1' })).toBeUndefined()
+  expect(resolveDesktopPolicyConfig(undefined)).toBeUndefined()
+})
+
+it('allows disabled policy only for unsigned Windows packaging', () => {
+  const env = { DSH_DESKTOP_APP_ID: 'io.github.mrtsl.harness', DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: '1' }
+  expect(() => validateDesktopPackageEnvironment(env, { platform: 'win32', arch: 'x64' }, { unsigned: true })).not.toThrow()
+  expect(() => validateDesktopPackageEnvironment(env, { platform: 'win32', arch: 'x64' })).toThrow('unsigned Windows')
+  expect(() => validateDesktopPackageEnvironment(env, { platform: 'darwin', arch: 'arm64' }, { unsigned: true })).toThrow('unsigned Windows')
+})
+
+it('rejects a misspelled policy disable flag', () => {
+  expect(() => resolveDesktopPolicyEnvironment({ DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: 'true' })).toThrow('must be 0 or 1')
 })

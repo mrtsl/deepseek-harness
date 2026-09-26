@@ -12,6 +12,16 @@ vi.mock('node:child_process', async (importOriginal) => {
 })
 
 describe('installer preparation preserves application dependencies', () => {
+  it('omits both update services from the unsigned personal installer', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const env = { DSH_DESKTOP_APP_ID: 'io.github.mrtsl.deepseek-harness',
+      DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: '1', DSH_DESKTOP_UNSIGNED: '1' }
+    const config = createElectronBuilderConfig(env, 'win32', 'x64')
+    expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+    expect(config.publish).toBeNull()
+    expect(() => createElectronBuilderConfig({ ...env, DSH_DESKTOP_UNSIGNED: '0' }, 'win32', 'x64'))
+      .toThrow('unsigned Windows')
+  })
   it.each(['win32', 'darwin'] as const)('rejects a missing production policy before signing on %s', async (platform) => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     expect(() => createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: 'com.example.installer',

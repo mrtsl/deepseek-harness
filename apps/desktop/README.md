@@ -283,6 +283,8 @@ Apple tooling uses the active macOS network service's HTTP/HTTPS proxies. Config
 
 ### Unsigned Windows test installer
 
+Personal forks may set `DSH_DESKTOP_MANDATORY_UPDATE_DISABLED=1` in `.env.windows` to omit mandatory-update requests as well. This setting is accepted only by unsigned Windows packaging; signed builds still require their policy service. See the [personal fork workflow](../../.github/fork/README.md) for synchronization and GitHub Actions builds.
+
 On Windows x64, use the complete unsigned packaging command for local installation testing:
 
 ```sh

@@ -202,3 +202,18 @@ it('owns macOS tuning in the local file and validates it before signing credenti
     expect(() =>{  validateDesktopPackageEnvironment({ ...RELEASE, DSH_DESKTOP_MACOS_NOTARIZATION_PROXY: 'socks5://localhost:8080' }, MACOS) }).toThrow('NOTARIZATION_PROXY')
   })
 })
+
+
+it('loads the personal policy opt-out from the Windows file rather than ambient settings', async () => {
+  await withDirectory(async (directory) => {
+    await writeFile(join(directory, '.env.windows'),
+      'DSH_DESKTOP_APP_ID=io.github.mrtsl.deepseek-harness\nDSH_DESKTOP_MANDATORY_UPDATE_DISABLED=1\n')
+    const env = loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: '0' }, directory)
+    expect(env.DSH_DESKTOP_MANDATORY_UPDATE_DISABLED).toBe('1')
+    expect(() => validateDesktopPackageEnvironment(env, WINDOWS, { unsigned: true })).not.toThrow()
+    await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_APP_ID=io.github.mrtsl.deepseek-harness\n')
+    const missing = loadDesktopPackageEnvironment('win32', { DSH_DESKTOP_MANDATORY_UPDATE_DISABLED: '1' }, directory)
+    expect(missing.DSH_DESKTOP_MANDATORY_UPDATE_DISABLED).toBeUndefined()
+    expect(() => validateDesktopPackageEnvironment(missing, WINDOWS, { unsigned: true })).toThrow('requires an HTTPS origin')
+  })
+})

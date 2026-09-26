@@ -1,0 +1,37 @@
+name: Fork - Checks
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.repository == 'mrtsl/deepseek-harness'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check desktop packaging configuration
+        run: pnpm exec vitest run apps/desktop/tests/desktop-policy-environment.spec.ts apps/desktop/tests/installer-packaging.spec.ts apps/desktop/tests/desktop-package-environment.spec.ts
+      - name: Check whitespace
+        run: git show --format= --check HEAD

@@ -1,0 +1,70 @@
+name: Fork - Windows installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.repository == 'mrtsl/deepseek-harness' && github.ref == 'refs/heads/dev'
+    runs-on: windows-2025
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify personal packaging configuration
+        run: pnpm exec vitest run apps/desktop/tests/desktop-policy-environment.spec.ts apps/desktop/tests/installer-packaging.spec.ts
+      - name: Configure personal Windows build
+        id: config
+        run: |
+          @'
+          DSH_DESKTOP_APP_ID=io.github.mrtsl.deepseek-harness
+          DSH_DESKTOP_MANDATORY_UPDATE_DISABLED=1
+          '@ | Set-Content apps/desktop/.env.windows -Encoding utf8
+          $base = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $date = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'China Standard Time').ToString('yyyyMMdd')
+          $prefix = if ($base.Contains('-')) { "$base." } else { "$base-test." }
+          $version = "$prefix$date.${env:GITHUB_RUN_NUMBER}.${env:GITHUB_RUN_ATTEMPT}"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "Version: $version`nSource: $env:GITHUB_SHA`nUnsigned personal build; official update services disabled." >> $env:GITHUB_STEP_SUMMARY
+      - name: Build Windows x64 installer
+        env:
+          BUILD_VERSION: ${{ steps.config.outputs.version }}
+        run: pnpm --dir apps/desktop run package:win:x64:unsigned --build-version "$env:BUILD_VERSION"
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-${{ steps.config.outputs.version }}-win-x64
+          path: apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-packaging-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: apps/desktop/.desktop-build/packaging-runs/**/events.jsonl
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7
