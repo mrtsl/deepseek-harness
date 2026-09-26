@@ -76,6 +76,7 @@ const endpoint: SshStreamEndpoint = { path: '/tmp/remote-helper/stream-0', capab
 
 function setup(options: {
   internals?: SshInternals
+  config?: Partial<Config>
   port?: number
   portError?: Error
   connect?: 'ok' | 'refused-once' | 'refused-always' | 'hold'
@@ -126,7 +127,7 @@ function setup(options: {
     queueMicrotask(() => { stream.emit('secureConnect') })
     return stream
   })
-  const service = new SshConnection(ctx, config, options.internals ?? { platform: 'win32' })
+  const service = new SshConnection(ctx, { ...config, ...options.config }, options.internals ?? { platform: 'win32' })
   onTestFinished(async () => {
     try { await service.dispose() } finally {
       for (const socket of [...raw, ...secured]) socket.destroy()
@@ -152,6 +153,20 @@ describe('SSH Windows local transport', () => {
     expect(argv).not.toContain('-S')
     expect(transport.connect.mock.calls[0]?.[0]).toEqual({ host: '127.0.0.1', port: 45_123, allowHalfOpen: true })
     expect(transport.exec).not.toHaveBeenCalled()
+  })
+
+  it('passes askpass environment to per-stream forwarding children', async () => {
+    const test = setup({
+      port: 45_134,
+      config: { batchMode: false, environment: { SSH_ASKPASS: '/tmp/dsh-askpass' } },
+    })
+    await test.service.ready
+    await test.service.connectStream(endpoint)
+    const argv = transport.spawn.mock.calls[1]?.[1] as string[]
+    const options = transport.spawn.mock.calls[1]?.[2] as { env?: NodeJS.ProcessEnv }
+    expect(argv).toContain('BatchMode=no')
+    expect(argv).not.toContain('BatchMode=yes')
+    expect(options.env).toMatchObject({ SSH_ASKPASS: '/tmp/dsh-askpass' })
   })
 
   it('retries a refused loopback connection while the forwarding child still runs', async () => {

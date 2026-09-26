@@ -29,13 +29,16 @@ kind: "package-reference"
 
 ### 部署前提
 
-远端主机需运行 Linux 或 macOS。Linux 或 macOS 的 Harness 主机要求本地 `ssh` 命令支持连接复用与 Unix 套接字转发，服务器也必须允许该转发。Windows 的 Harness 主机改为每个流绑定一个回环转发，要求 `ssh` 命令能把 TCP 转发到远端套接字路径，且不需要连接复用。启动前配置主机别名、凭据与已知主机记录：本服务启用 `BatchMode`、要求严格检查主机密钥、禁用认证代理转发，且不提供交互认证流程。
+远端主机需运行 Linux 或 macOS。Linux 或 macOS 的 Harness 主机要求本地 `ssh` 命令支持连接复用与 Unix 套接字转发，服务器也必须允许该转发。Windows 的 Harness 主机改为每个流绑定一个回环转发，要求 `ssh` 命令能把 TCP 转发到远端套接字路径，且不需要连接复用。启动前配置主机别名、凭据与已知主机记录：本服务默认启用 `BatchMode`、要求严格检查主机密钥、禁用认证代理转发，且不提供交互认证流程，除非产品层提供支持 askpass 的客户端选项与环境。
 
 在远端主机安装已构建的辅助程序及其匹配的运行依赖。Node、辅助程序、引导程序及其依赖必须位于工作区和可写临时目录之外，也必须位于后端会替换的临时目录树之外，例如 bwrap 的私有 `/tmp`；工作区仍可位于 `/tmp` 下。摘要校验在辅助程序启动后发现非预期的已安装产物；它不能保证可写部署文件的执行安全，也不能认证恶意 SSH 主机。
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `host` | 必填 | 已有的 OpenSSH 主机别名 |
+| `clientOptions` | `[]` | 添加到主机参数之前的额外 OpenSSH 客户端参数 |
+| `batchMode` | `true` | 子 `ssh` 命令是否使用 `BatchMode=yes`；产品管理的 askpass 流程会设为 `false` |
+| `environment` | `{}` | 合并到每个 OpenSSH 子进程的额外环境变量 |
 | `node`、`helper`、`workspace` | 必填 | 远端 Node 可执行文件、辅助程序打包入口和默认工作区的绝对路径 |
 | `helperHash` | 必填 | 已安装辅助程序入口的小写 SHA-256 |
 | `bootstrapPath`、`bootstrapHash` | 省略 | 成对提供的远端 PTC 入口及其小写 SHA-256 |

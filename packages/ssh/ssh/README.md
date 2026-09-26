@@ -29,13 +29,16 @@ Compose this service with [`fs-ssh`](../fs-ssh/README.md), [`subprocess-ssh`](..
 
 ### Deployment prerequisites
 
-The remote host requires Linux or macOS. A Linux or macOS Harness host needs a local `ssh` command that supports connection multiplexing and Unix-socket forwarding, and the server must permit that forwarding. A Windows Harness host instead binds one loopback forward per stream, which needs an `ssh` command that forwards TCP to a remote socket path and no connection multiplexing. Configure the alias, credentials and known-host entry before startup: the service enables `BatchMode`, requires strict host-key checking, disables agent forwarding and adds no interactive authentication flow.
+The remote host requires Linux or macOS. A Linux or macOS Harness host needs a local `ssh` command that supports connection multiplexing and Unix-socket forwarding, and the server must permit that forwarding. A Windows Harness host instead binds one loopback forward per stream, which needs an `ssh` command that forwards TCP to a remote socket path and no connection multiplexing. Configure the alias, credentials and known-host entry before startup: the service enables `BatchMode` by default, requires strict host-key checking, disables agent forwarding and adds no interactive authentication flow unless a product owner supplies askpass-capable client options and environment.
 
 Install the built helper and its matching runtime dependencies on the remote host. Keep Node, helper, bootstrap and their dependencies outside the workspace and writable temporary roots. They must also remain outside a backend’s replaced temporary tree, such as bwrap’s private `/tmp`; the workspace may still be under `/tmp`. Digest verification detects an unexpected installed artifact after helper startup; it does not make writable deployment files safe to execute or authenticate a malicious SSH host.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `host` | required | Existing OpenSSH host alias |
+| `clientOptions` | `[]` | Additional OpenSSH client arguments placed before the host argument |
+| `batchMode` | `true` | Whether child `ssh` commands use `BatchMode=yes`; product-managed askpass flows set this to `false` |
+| `environment` | `{}` | Extra environment variables merged into every OpenSSH child |
 | `node`, `helper`, `workspace` | required | Absolute remote Node executable, bundled helper entry and default workspace |
 | `helperHash` | required | Lowercase SHA-256 of the installed helper entry |
 | `bootstrapPath`, `bootstrapHash` | omitted | Paired remote PTC entry and its lowercase SHA-256 |

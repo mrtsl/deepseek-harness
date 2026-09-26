@@ -138,6 +138,7 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
     { bootstrapPath: '/remote/bootstrap.js' }, { bootstrapHash: 'b'.repeat(64) },
     { requestTimeoutMs: 0 }, { requestTimeoutMs: 2_147_483_648 },
     { maxFrameBytes: 64 * 1024 * 1024 + 1 }, { maxPending: 129 }, { leaseMs: 2999 },
+    { clientOptions: ['-F', 'bad\npath'] }, { environment: { SSH_ASKPASS: 'bad\nhelper' } },
   ])('rejects invalid deployment configuration before SSH starts: %j', (invalid) => {
     expect(() => setup({ config: invalid })).toThrow()
     expect(transport.spawn).not.toHaveBeenCalled()
@@ -160,6 +161,28 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
     expect(argv).not.toContain('-M')
     expect(argv).not.toContain('ControlPersist=no')
     expect(argv.at(-1)).toBe("'/remote/node' '--disable-sigusr1' '/remote/helper.js'")
+  })
+
+  it('passes product-owned OpenSSH options before the host and keeps batch mode by default', async () => {
+    const test = setup({ config: { clientOptions: ['-F', '/tmp/dsh-ssh/config'], environment: { DSH_TEST_ENV: '1' } } })
+    await test.service.ready
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    const options = transport.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv }
+    expect(argv.indexOf('-F')).toBeGreaterThanOrEqual(0)
+    expect(argv[argv.indexOf('-F') + 1]).toBe('/tmp/dsh-ssh/config')
+    expect(argv.indexOf('-F')).toBeLessThan(argv.indexOf('test-alias'))
+    expect(argv).toContain('BatchMode=yes')
+    expect(options.env).toMatchObject({ DSH_TEST_ENV: '1' })
+  })
+
+  it('allows askpass-capable startup by disabling batch mode and forwarding environment', async () => {
+    const test = setup({ config: { batchMode: false, environment: { SSH_ASKPASS: '/tmp/dsh-askpass' } } })
+    await test.service.ready
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    const options = transport.spawn.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv }
+    expect(argv).toContain('BatchMode=no')
+    expect(argv).not.toContain('BatchMode=yes')
+    expect(options.env).toMatchObject({ SSH_ASKPASS: '/tmp/dsh-askpass' })
   })
 
   it('publishes only verified remote coordinates and quotes the configured executable paths', async () => {

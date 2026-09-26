@@ -35,6 +35,12 @@ export interface SshInternals {
 export interface Config {
   /** OpenSSH host alias, including its existing user, key and known-host configuration. */
   host: string
+  /** Product-owned OpenSSH client options, placed before the host argument. */
+  clientOptions?: readonly string[]
+  /** Whether SSH authentication must be non-interactive. Disable only with an askpass environment. */
+  batchMode?: boolean
+  /** Extra environment for OpenSSH children, such as SSH_ASKPASS. */
+  environment?: Record<string, string>
   /** Absolute remote Node executable. */
   node: string
   /** Absolute path to the installed, bundled helper entry. */
@@ -114,6 +120,8 @@ export class SshConnection extends Service {
   static Config: schema<Config> = schema.object({
     host: schema.string().required(), node: schema.string().required(), helper: schema.string().required(),
     helperHash: schema.string().required(), workspace: schema.string().required(),
+    clientOptions: schema.array(schema.string()).default([]), batchMode: schema.boolean().default(true),
+    environment: schema.dict(schema.string()).default({}),
     bootstrapPath: schema.string(), bootstrapHash: schema.string(),
     requestTimeoutMs: schema.number().default(30_000), maxFrameBytes: schema.number().default(64 * 1024 * 1024),
     maxPending: schema.number().default(128), leaseMs: schema.number().default(30_000),
@@ -148,8 +156,12 @@ export class SshConnection extends Service {
     const platform = internals.platform ?? process.platform
     if (platform !== 'linux' && platform !== 'darwin' && platform !== 'win32') throw new Error('SSH runtime requires a Linux, macOS, or Windows client')
     this.windows = platform === 'win32'
+    const safeCliValue = z.string().regex(/^[^\0\r\n]+$/)
     this.config = z.object({
       host: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_.@-]*$/),
+      clientOptions: z.array(safeCliValue).default([]),
+      batchMode: z.boolean().default(true),
+      environment: z.record(safeCliValue.min(1), safeCliValue).default({}),
       node: z.string().startsWith('/'), helper: z.string().startsWith('/'), helperHash: z.string().regex(/^[0-9a-f]{64}$/),
       workspace: z.string().startsWith('/'), requestTimeoutMs: z.number().int().positive().max(2_147_483_647),
       bootstrapPath: z.string().startsWith('/').optional(), bootstrapHash: z.string().regex(/^[0-9a-f]{64}$/).optional(),
@@ -244,10 +256,10 @@ export class SshConnection extends Service {
     const port = await allocateLoopbackPort()
     // A forwarding child owns no administrative channel, so it keeps the connection open and drains no diagnostics.
     const child = spawn('ssh', [
-      '-T', '-N', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no',
+      '-T', '-N', ...this.sshBaseArgs(),
       '-o', 'ExitOnForwardFailure=yes', '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=3',
       '-L', `127.0.0.1:${port}:${remote}`, this.config.host,
-    ], { stdio: ['ignore', 'ignore', 'ignore'] })
+    ], { stdio: ['ignore', 'ignore', 'ignore'], env: this.sshEnv() })
     this.forwards.add(child)
     // The listener binds only after SSH authentication, so a child failure must end the wait instead of its deadline.
     let childFailure: Error | undefined
@@ -359,6 +371,19 @@ export class SshConnection extends Service {
 
   private controlPath(): string { return join(this.directory as string, 'master') }
 
+  private sshBaseArgs(): string[] {
+    return [
+      ...this.config.clientOptions,
+      '-o', `BatchMode=${this.config.batchMode ? 'yes' : 'no'}`,
+      '-o', 'StrictHostKeyChecking=yes',
+      '-o', 'ForwardAgent=no',
+    ]
+  }
+
+  private sshEnv(): NodeJS.ProcessEnv {
+    return { ...process.env, ...this.config.environment }
+  }
+
   private assertOpen(): void {
     if (this.closed) throw new Error('SSH connection is closed')
     if (this.failure !== undefined) throw this.failure
@@ -376,8 +401,8 @@ export class SshConnection extends Service {
     const combined = AbortSignal.any(signals)
     combined.throwIfAborted()
     const result = Promise.withResolvers<undefined>()
-    const command = execFile('ssh', ['-S', this.controlPath(), ...args, this.config.host], {
-      signal: combined, maxBuffer: 64 * 1024,
+    const command = execFile('ssh', ['-S', this.controlPath(), ...this.sshBaseArgs(), ...args, this.config.host], {
+      signal: combined, maxBuffer: 64 * 1024, env: this.sshEnv(),
     }, (error) => { if (error === null) result.resolve(undefined); else result.reject(error) })
     const closed = new Promise<void>((resolve) => { command.once('close', () => { resolve() }) })
     let force: NodeJS.Timeout | undefined
@@ -415,10 +440,9 @@ export class SshConnection extends Service {
       '-T',
       // Windows OpenSSH has no connection multiplexing, so it cannot host a control master for later forwards.
       ...(this.windows ? [] : ['-M', '-S', this.controlPath(), '-o', 'ControlPersist=no']),
-      '-o', 'BatchMode=yes',
-      '-o', 'StrictHostKeyChecking=yes', '-o', 'ForwardAgent=no', '-o', 'ClearAllForwardings=yes',
+      ...this.sshBaseArgs(), '-o', 'ClearAllForwardings=yes',
       '-o', 'ServerAliveInterval=10', '-o', 'ServerAliveCountMax=3', this.config.host, command,
-    ], { stdio: ['pipe', 'pipe', 'pipe'] })
+    ], { stdio: ['pipe', 'pipe', 'pipe'], env: this.sshEnv() })
     this.child = child
     this.childClosed = new Promise((resolve) => { child.once('close', () => { resolve() }) })
     child.stderr.resume() // SSH diagnostics can contain configured paths; operation errors remain structured.
