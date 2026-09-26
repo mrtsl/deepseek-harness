@@ -12,7 +12,7 @@ SSH supplies authenticated byte channels and per-channel flow control, but an or
 
 ## Decision
 
-A deployment-owned OpenSSH alias connects the local Harness to an installed POSIX helper. Filesystem, subprocess and sandbox providers share that helper; the Harness retains Cordis objects, model transport, permissions, callbacks and Session persistence. Terminal methods remain asynchronous. Provider paths describe the execution world without a separate local/remote flag.
+A deployment-owned OpenSSH alias connects the local Harness to an installed POSIX helper. The local client runs on Linux, macOS or Windows. A Windows client has no OpenSSH control master, so it reaches the helper through one loopback TCP forward per program stream instead of multiplexed Unix-socket forwards. Filesystem, subprocess and sandbox providers share that helper; the Harness retains Cordis objects, model transport, permissions, callbacks and Session persistence. Terminal methods remain asynchronous. Provider paths describe the execution world without a separate local/remote flag.
 
 Confinement is asynchronous and cancellable: the running helper resolves each policy through its loaded sandbox provider before the subprocess provider receives literal argv. `ShellExecutor.start()` resolves a `Promise<ShellProcess>` after preparation. Generic job admission remains synchronous; tool-owned `JobHooks` begin asynchronous shell preparation after preflight, cancel pending preparation and join any late process handle.
 
@@ -34,7 +34,7 @@ A lost connection invalidates pending operations without reconnect or replay. He
 
 **Replace remote file operations with SFTP alone.** SFTP supplies file transport but does not directly preserve the existing guarded atomic-write, edit, policy and error semantics. Reusing the remote local filesystem providers keeps those mechanisms with their current owners.
 
-**Expose TCP or HTTP endpoints for program streams.** This permits independent transports but introduces remote port exposure, endpoint authentication and server deployment beyond the existing SSH connection. Forwarded Unix sockets use the authenticated SSH session and additionally authenticate both stream endpoints with TLS-PSK against same-user connections or pathname replacement.
+**Expose TCP or HTTP endpoints for program streams.** This permits independent transports but introduces remote port exposure, endpoint authentication and server deployment beyond the existing SSH connection. Forwarded Unix sockets use the authenticated SSH session and additionally authenticate both stream endpoints with TLS-PSK against same-user connections or pathname replacement. A Windows client's loopback listener is the local end of one SSH forward rather than such an endpoint: it exposes no remote port, adds no server, and keeps the same TLS-PSK authentication.
 
 **Move the complete Harness to the remote host.** That is a separate deployment model. It moves model credentials, Session storage and plugin state with execution rather than supplying remote implementations of existing capabilities.
 
@@ -42,13 +42,13 @@ A lost connection invalidates pending operations without reconnect or replay. He
 
 Remote providers add transport, reservation and disconnection responsibilities even though they reuse local file and process mechanisms. Raw streams, collected tails and remote spill files retain distinct lifetimes. Consumers must release their streams and handles; a helper’s cleanup result cannot be reconstructed after transport loss.
 
-The initial composition scope is POSIX headless and custom profiles. Web workspace consumers with host-filesystem assumptions require their own integration. Network restrictions, process-visibility isolation, hostile-host attestation, persistent remote handles and automatic artifact provisioning are outside this provider family.
+The initial composition scope is headless and custom profiles on Linux, macOS or Windows. Web workspace consumers with host-filesystem assumptions require their own integration. Network restrictions, process-visibility isolation, hostile-host attestation, persistent remote handles and automatic artifact provisioning are outside this provider family.
 
 The portable-consumer decision remains active; this note supplies its SSH realization. The E2B retirement remains active for the removed integration and its maintenance tradeoff. Neither note is fully superseded.
 
 ## Verification
 
-Required protocol and lifecycle evidence covers malformed frames, bounds, reservation cancellation, authenticated stream publication and disconnect errors. Native SSH acceptance must exercise remote file guards and symlink identity, Bash confinement, fd 7 binary traffic, control progress under paused output, terminal operations, LSP and Node execution. Live checks require an explicitly configured disposable remote workspace; keyless tests do not provision one.
+Required protocol and lifecycle evidence covers malformed frames, bounds, reservation cancellation, authenticated stream publication and disconnect errors. Native SSH acceptance must exercise remote file guards and symlink identity, Bash confinement, fd 7 binary traffic, control progress under paused output, terminal operations, LSP and Node execution. The Windows local transport is pinned on every host by injected-platform unit tests; its loopback forwarding, connection retry and forwarding-child teardown still require a live Windows acceptance run. Live checks require an explicitly configured disposable remote workspace; keyless tests do not provision one.
 
 Security evidence requires both a same-user connector and a replaced socket listener that cannot claim a reserved stream, learn its key, alter another run or receive its plaintext output. Process-lifecycle evidence distinguishes direct exit from managed-range quiescence and tests cancellation both before launch publication and after the payload starts. Source and built profile checks verify the installed helper/bootstrap arrangement without transferring host credentials to program environments.
 

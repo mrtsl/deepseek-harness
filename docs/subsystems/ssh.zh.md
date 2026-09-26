@@ -12,7 +12,7 @@
 
 ## 传输与信任
 
-管理 RPC 使用辅助进程的 SSH exec 流。普通 stdin、stdout、stderr、终端输出及可选 fd 7 控制流使用分别认证的转发 Unix 套接字。每条转发流拥有独立 SSH 通道窗口；暂停的程序输出不与控制或管理消息共用窗口。所有通道仍共享连接带宽及传输失败。
+管理 RPC 使用辅助进程的 SSH exec 流。Linux 或 macOS 客户端上，普通 stdin、stdout、stderr、终端输出及可选 fd 7 控制流使用分别认证的转发 Unix 套接字；Windows 客户端上改为每条流一个回环 TCP 转发，因为它不提供控制主连接。每条转发流拥有独立 SSH 通道窗口；暂停的程序输出不与控制或管理消息共用窗口。Linux 或 macOS 客户端的各通道共享该连接的带宽及传输失败；Windows 客户端为每条流建立独立连接。
 
 部署认证、已安装产物验证及逐流 TLS 认证属于 [`dsh-ssh`](../../packages/ssh/ssh/README.zh.md)。辅助进程使用远端机器上的可信本地提供方执行文件系统与进程请求。SSH 是传输方式；文件效果限制由所选远端沙箱提供方执行。
 
@@ -64,7 +64,9 @@ declare class SshConnection extends Service {
   static Config: schema<Config>;
   /** Verified remote helper coordinates; callers must await this before launch. */
   readonly ready: Promise<Hello>;
-  constructor(ctx: Context, config: Config);
+  /** Replaced by tests to exercise a client platform this host cannot provide. */
+  readonly internals: SshInternals;
+  constructor(ctx: Context, config: Config, internals: SshInternals = {});
   /** Hold plugin readiness until the remote identity and helper digest are verified. */
   async [Service.init](): Promise<void>;
   /** Verified remote Node executable for the paired PTC runtime. */

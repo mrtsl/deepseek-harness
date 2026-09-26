@@ -12,7 +12,7 @@ Filesystem identities, executable lookup, process cwd, sandbox workspace roots a
 
 ## Transport and trust
 
-Administrative RPC uses the helper’s SSH exec streams. Ordinary stdin, stdout, stderr, terminal output and optional fd 7 control traffic use separately authenticated forwarded Unix sockets. Each forwarded stream has its own SSH channel window; paused program output does not share the control or administrative window. All channels still share connection bandwidth and transport failure.
+Administrative RPC uses the helper’s SSH exec streams. Ordinary stdin, stdout, stderr, terminal output and optional fd 7 control traffic use separately authenticated forwarded Unix sockets on a Linux or macOS client, and one loopback TCP forward per stream on a Windows client, which hosts no control master. Each forwarded stream has its own SSH channel window; paused program output does not share the control or administrative window. Channels of a Linux or macOS client share that connection’s bandwidth and transport failure; a Windows client gives every stream its own connection.
 
 Deployment authentication, installed artifact verification and per-stream TLS authentication belong to [`dsh-ssh`](../../packages/ssh/ssh/README.md). The helper executes filesystem and process requests with trusted local providers on the remote machine. SSH is a transport; the selected remote sandbox provider enforces file effects.
 
@@ -64,7 +64,9 @@ declare class SshConnection extends Service {
   static Config: schema<Config>;
   /** Verified remote helper coordinates; callers must await this before launch. */
   readonly ready: Promise<Hello>;
-  constructor(ctx: Context, config: Config);
+  /** Replaced by tests to exercise a client platform this host cannot provide. */
+  readonly internals: SshInternals;
+  constructor(ctx: Context, config: Config, internals: SshInternals = {});
   /** Hold plugin readiness until the remote identity and helper digest are verified. */
   async [Service.init](): Promise<void>;
   /** Verified remote Node executable for the paired PTC runtime. */

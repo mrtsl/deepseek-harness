@@ -6,7 +6,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { SshRpcPeer } from '../src/protocol.ts'
 import { SshConnection } from '../src/index.ts'
-import type { Config } from '../src/index.ts'
+import type { Config, SshInternals } from '../src/index.ts'
 
 const transport = vi.hoisted(() => ({ spawn: vi.fn(), exec: vi.fn(), connect: vi.fn(), tls: vi.fn(), directory: vi.fn(), remove: vi.fn() }))
 vi.mock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), spawn: transport.spawn, execFile: transport.exec }))
@@ -62,6 +62,7 @@ const hello = {
 
 function setup(options: {
   config?: Partial<Config>
+  internals?: SshInternals
   hello?: Record<string, unknown>
   holdHello?: boolean
   holdConnect?: boolean
@@ -126,7 +127,7 @@ function setup(options: {
       for (const mock of Object.values(transport)) mock.mockReset()
     }
   })
-  service = new SshConnection(ctx, { ...config, ...options.config })
+  service = new SshConnection(ctx, { ...config, ...options.config }, options.internals ?? {})
   return { service, child, helper, raw, secure, calls, requestEntered: requestEntered.promise,
     helloEntered: helloEntered.promise, releaseHello: () => { releaseHello.resolve(undefined) }, release: () => { released.resolve(null) } }
 }
@@ -142,11 +143,23 @@ describe.skipIf(process.platform === 'win32')('SSH connection startup', () => {
     expect(transport.spawn).not.toHaveBeenCalled()
   })
 
-  it('rejects a non-POSIX client before starting SSH', () => {
-    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    try { expect(() => setup()).toThrow('POSIX client') }
+  it('rejects a client platform without an OpenSSH client before starting SSH', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('aix')
+    try { expect(() => setup()).toThrow('Linux, macOS, or Windows client') }
     finally { platform.mockRestore() }
     expect(transport.spawn).not.toHaveBeenCalled()
+  })
+
+  it('omits the control master a Windows client cannot host and keeps the verified host options', async () => {
+    const test = setup({ internals: { platform: 'win32' } })
+    await test.service.ready
+    const argv = transport.spawn.mock.calls[0]?.[1] as string[]
+    expect(argv).toContain('BatchMode=yes')
+    expect(argv).toContain('StrictHostKeyChecking=yes')
+    expect(argv).toContain('ForwardAgent=no')
+    expect(argv).not.toContain('-M')
+    expect(argv).not.toContain('ControlPersist=no')
+    expect(argv.at(-1)).toBe("'/remote/node' '--disable-sigusr1' '/remote/helper.js'")
   })
 
   it('publishes only verified remote coordinates and quotes the configured executable paths', async () => {

@@ -23,7 +23,7 @@ import { doneSchema, preparedSchema } from '../src/schemas.ts'
 const configPath = process.env.DSH_SSH_TEST_CONFIG
 const bootstrap = process.env.DSH_SSH_TEST_BOOTSTRAP
 const languageServer = process.env.DSH_SSH_TEST_LSP
-const enabled = configPath !== undefined && process.platform !== 'win32'
+const enabled = configPath !== undefined
 
 async function setup() {
   const config = JSON.parse(readFileSync(configPath as string, 'utf8')) as Config
