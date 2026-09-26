@@ -23,6 +23,7 @@ kind: "package-group"
 | 包 | 职责 | 服务 |
 |---|---|---|
 | [`ssh`](ssh/README.zh.md) | 连接、辅助程序身份及传输生命周期 | `ctx.ssh` |
+| [`ssh-hosts`](ssh-hosts/README.zh.md) | 持久局域网主机记录、状态和隔离执行上下文 | `ctx.sshHostManager` |
 | [`fs-ssh`](fs-ssh/README.zh.md) | 远端文件身份、读取及带保护的原子修改 | `ctx.fs` |
 | [`subprocess-ssh`](subprocess-ssh/README.zh.md) | 可执行文件查找、进程、控制流及终端 | `ctx.subprocess` |
 | [`sandbox-ssh`](sandbox-ssh/README.zh.md) | 远端文件效果限制及执行信息 | `ctx.sandbox` |
