@@ -126,6 +126,7 @@
     { "path": "./packages/client/ui-settings/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-general/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-models" },
+    { "path": "./packages/client/ui-settings-ssh-hosts" },
     { "path": "./packages/client/ui-plugin-manager/tsconfig.client.json" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
     { "path": "./packages/client/locale/tsconfig.client.json" },
