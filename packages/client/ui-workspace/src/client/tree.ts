@@ -73,6 +73,8 @@ export interface GroupNode {
   cwd: string | undefined
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
+  /** Compact environment label shown under/next to the Workspace title. */
+  environmentLabel?: string | undefined
   label: string
   /** Total visible sessions in the group. */
   sessionCount: number
@@ -118,6 +120,7 @@ interface Group {
   workspaceId: WorkspaceId | undefined
   cwd: string | undefined
   createdAt: number | undefined
+  environmentLabel?: string | undefined
   label: string
   sessions: SessionSummary[]
 }
@@ -301,10 +304,11 @@ function buildGroup(
   workspaceId: WorkspaceId | undefined,
   cwd: string | undefined,
   createdAt: number | undefined,
+  environmentLabel: string | undefined,
   label: string,
   members: readonly SessionSummary[],
 ): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
+  return { key, workspaceId, cwd, createdAt, environmentLabel, label, sessions: [...members] }
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -354,7 +358,7 @@ function groupByWorkspace(
     if (archivedFilter === 'only' && members.length === 0) continue
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
+      Date.parse(workspace.createdAt), environmentLabel(workspace), workspace.title, members,
     ))
   }
   const stray = list.ids
@@ -364,6 +368,7 @@ function groupByWorkspace(
   if (stray.length > 0) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -454,6 +459,7 @@ export function deriveGroups(
       workspaceId: g.workspaceId,
       cwd: g.cwd,
       createdAt: g.createdAt,
+      environmentLabel: g.environmentLabel,
       label: g.label,
       sessionCount: g.sessions.length,
       expanded,
@@ -465,6 +471,13 @@ export function deriveGroups(
     })
   }
   return groups
+}
+
+function environmentLabel(workspace: WorkspaceView): string | undefined {
+  if (workspace.environment?.kind !== 'ssh') return undefined
+  return workspace.environment.hostName === undefined
+    ? 'LAN'
+    : `LAN · ${workspace.environment.hostName}`
 }
 
 /**

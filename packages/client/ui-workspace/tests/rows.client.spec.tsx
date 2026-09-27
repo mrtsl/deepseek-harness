@@ -161,6 +161,27 @@ describe('workspace browser rows', () => {
     expect(onToggle).toHaveBeenCalledOnce()
   })
 
+  it('renders compact SSH labels only on remote Workspace rows', () => {
+    const remote: GroupNode = {
+      key: 'remote', workspaceId: wid('remote'), cwd: '/repo', createdAt: 0,
+      label: 'Repo', environmentLabel: 'LAN · devbox',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+    const local: GroupNode = {
+      key: 'local', workspaceId: wid('local'), cwd: '/local', createdAt: 0,
+      label: 'Local',
+      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+    }
+
+    render(<>
+      <ProjectRowItem group={remote} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />
+      <ProjectRowItem group={local} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />
+    </>)
+
+    expect(screen.getByText('LAN · devbox')).toBeTruthy()
+    expect(screen.queryByText('LAN · Local')).toBeNull()
+  })
+
   it('renders and opens a selected running Session row', () => {
     const node: SessionNode = {
       id: sid('session'), title: 'Session', blank: false, running: true,

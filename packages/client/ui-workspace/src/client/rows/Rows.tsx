@@ -264,6 +264,7 @@ export function ProjectRowItem({ group, containsCurrentDescendant = false, onTog
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
+        {row.environmentLabel !== undefined && <span className={css.environmentLabel}>{row.environmentLabel}</span>}
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (

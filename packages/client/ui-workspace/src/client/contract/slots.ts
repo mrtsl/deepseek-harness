@@ -48,7 +48,10 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SessionSearchResultItem } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
-import type { SessionActivity, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {
+  SessionActivity, WorkspaceId, WorkspaceView,
+} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceCreateRequest } from '@deepseek-ai/dsh-api-workspace-controller/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ShortcutCatalogEntry } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { WorkspaceShortcutState } from '../shortcuts.ts'
@@ -64,13 +67,16 @@ export interface DirectoryFlowOwnerProps {
   open: boolean
   /** True while the owner adopts a picked path (`createWorkspace` in flight); occupants disable their commit affordances. */
   busy: boolean
-  /** The operator picked a directory (absolute host path); the owner adopts it. */
-  onPicked: (path: string) => void
+  /** The operator picked a directory; the owner adopts it as local or environment-scoped. */
+  onPicked: (directory: WorkspacePickedDirectory) => void
   /** The operator dismissed the interaction; the owner just closes the flow. */
   onCancel: () => void
   /** The interaction itself failed (chooser missing, listing denied); the owner shows its error surface. */
   onError: (message: string) => void
 }
+
+/** Directory-flow result. A string is the legacy local path shorthand. */
+export type WorkspacePickedDirectory = string | WorkspaceCreateRequest
 
 /** Owner share of one Session row action occurrence: the row the action belongs to. */
 export interface SessionRowOwnerProps {
@@ -115,8 +121,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** SSH directory-flow hole under the conversation empty-state picker. */
+    'conversation.hero.workspace.sshDirectoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** SSH directory-flow hole under the sidebar browsing region. */
+    'sidebar.workspaces.sshDirectoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /**
      * Leading decoration of one Session row, in the 16px cell before the title
      * that the row's own state dot otherwise occupies. A higher-priority state
@@ -188,7 +198,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** The two directory-flow holes; a flow package's client half registers its one component into both. */
 export type DirectoryFlowSlotName =
   | 'conversation.hero.workspace.directoryFlow'
+  | 'conversation.hero.workspace.sshDirectoryFlow'
   | 'sidebar.workspaces.directoryFlow'
+  | 'sidebar.workspaces.sshDirectoryFlow'
 
 /**
  * Directory-picking share both trigger surfaces consume. Occupancy rides the
@@ -201,6 +213,8 @@ export type DirectoryPickingInjected = {
   hooks: {
     /** True while this surface's directory-flow hole is occupied. */
     directoryFlow: HostObservable<boolean>
+    /** True while this surface's SSH directory-flow hole is occupied. */
+    sshDirectoryFlow?: HostObservable<boolean>
   }
 }
 
@@ -268,7 +282,7 @@ export type WorkspaceBrowserInjected = {
   /** Remove a Session from the registry-global archived set (the search results' restore button). */
   unarchiveSession: (sessionId: SessionId) => Promise<void>
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  createWorkspace: (input: WorkspaceCreateRequest) => Promise<WorkspaceView>
 }
 
 /** The browser's declared viewing store handle, shared with the row actions that write view state. */
@@ -455,6 +469,7 @@ export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
   & PropsRenderSlots<
     | 'sidebar.workspaces.directoryFlow'
+    | 'sidebar.workspaces.sshDirectoryFlow'
     | 'sidebar.workspaces.session.menu.item'
     | 'sidebar.workspaces.session.row.action'
     | 'sidebar.session.row.leading'
@@ -472,7 +487,7 @@ export type WorkspaceBrowserProps =
  */
 export type WorkspacePickerInjected = DirectoryPickingInjected & {
   /** Adopt a picked host directory as a real Workspace before targeting a Session. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  createWorkspace: (input: WorkspaceCreateRequest) => Promise<WorkspaceView>
 }
 
 /**
@@ -482,7 +497,7 @@ export type WorkspacePickerInjected = DirectoryPickingInjected & {
  */
 export type WorkspacePickerProps =
   PropsRuntime<'conversation.hero.workspace'>
-  & PropsRenderSlots<'conversation.hero.workspace.directoryFlow'>
+  & PropsRenderSlots<'conversation.hero.workspace.directoryFlow' | 'conversation.hero.workspace.sshDirectoryFlow'>
   & Omit<WorkspacePickerInjected, 'hooks'>
   & PropsHooks<WorkspacePickerInjected['hooks']>
   & PropsLocale<'workspace'>

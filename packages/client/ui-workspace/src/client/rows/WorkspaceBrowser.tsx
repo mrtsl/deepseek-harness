@@ -854,6 +854,7 @@ export function WorkspaceBrowser({
   searchSessions,
   searchResultLimit,
   useDirectoryFlow,
+  useSshDirectoryFlow,
   useHostInfo,
   useShortcuts,
   useWorkspaceShortcuts,
@@ -889,7 +890,7 @@ export function WorkspaceBrowser({
   const pinnedSessionIds = useWorkspaces(state => state.pinnedSessionIds)
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
-  const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
+  const directoryFlowAvailable = useDirectoryFlow(occupied => occupied) || (useSshDirectoryFlow?.(occupied => occupied) ?? false)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
   // Persisted view blobs written before the archived filter existed rehydrate
@@ -1309,7 +1310,9 @@ export function WorkspaceBrowser({
           useWorkspaces={useWorkspaces}
           createWorkspace={createWorkspace}
           useDirectoryFlow={useDirectoryFlow}
+          useSshDirectoryFlow={useSshDirectoryFlow}
           renderDirectoryFlow={owner => renderSlot('sidebar.workspaces.directoryFlow', owner)}
+          renderSshDirectoryFlow={owner => renderSlot('sidebar.workspaces.sshDirectoryFlow', owner)}
           addOnly
           onBusyChange={setDirectoryBusy}
           side="right"

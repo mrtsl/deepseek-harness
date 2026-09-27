@@ -16,9 +16,10 @@ import {
 import type {
   WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceCreateRequest } from '@deepseek-ai/dsh-api-workspace-controller/types'
 import { workspaceDisplayTitle } from '@deepseek-ai/dsh-api-workspace-controller/default-workspace'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import type { DirectoryFlowOwnerProps, WorkspacePickerProps } from './contract/slots.ts'
+import type { DirectoryFlowOwnerProps, WorkspacePickedDirectory, WorkspacePickerProps } from './contract/slots.ts'
 import css from './WorkspacePicker.module.css'
 
 const ADD_WORKSPACE = '::add-workspace'
@@ -34,11 +35,15 @@ export interface WorkspacePickFlowProps {
   /** Selector hook over the workspace list (framework standard hook). */
   useWorkspaces: <S>(selector: (state: WorkspaceSnapshot) => S) => S
   /** Adopt a picked host directory as a real Workspace. */
-  createWorkspace: (input: { path: string }) => Promise<WorkspaceView>
+  createWorkspace: (input: WorkspaceCreateRequest) => Promise<WorkspaceView>
   /** Bound occupancy selector hook for this surface's directory-flow hole (empty leaves the surface with no add action). */
   useDirectoryFlow: SnapshotSelectorHook<boolean>
+  /** Bound occupancy selector hook for the SSH directory-flow hole. */
+  useSshDirectoryFlow?: SnapshotSelectorHook<boolean> | undefined
   /** Render this surface's directory-flow hole with the owner conversation (the entry's narrowed renderSlot). */
   renderDirectoryFlow: (owner: DirectoryFlowOwnerProps) => ReactNode
+  /** Render this surface's SSH directory-flow hole with the owner conversation. */
+  renderSshDirectoryFlow?: ((owner: DirectoryFlowOwnerProps) => ReactNode) | undefined
   /** A real Workspace was picked or created. */
   onPick: (workspaceId: WorkspaceId) => void
   /** Close the popover (outside click / Escape / post-pick). */
@@ -65,7 +70,9 @@ export function WorkspacePickFlow({
   useWorkspaces,
   createWorkspace,
   useDirectoryFlow,
+  useSshDirectoryFlow,
   renderDirectoryFlow,
+  renderSshDirectoryFlow,
   onPick,
   onClose,
   addOnly = false,
@@ -94,7 +101,9 @@ export function WorkspacePickFlow({
   // entry simply is not there (the seam's documented no-flow default). The
   // framework-bound hook keeps occupancy live: flow plugins activate (and
   // HMR-reload) independently of this menu's renders.
-  const flowAvailable = useDirectoryFlow(occupied => occupied)
+  const localFlowAvailable = useDirectoryFlow(occupied => occupied)
+  const sshFlowAvailable = useSshDirectoryFlow?.(occupied => occupied) ?? false
+  const flowAvailable = localFlowAvailable || sshFlowAvailable
   // An occupant that unloads mid-interaction leaves nobody to cancel: an
   // open flow over an empty hole withdraws so the menu actions come back.
   // flowOpen is a dependency because the flow can also OPEN over an already
@@ -128,8 +137,8 @@ export function WorkspacePickFlow({
   }
 
   /** Adopt a picked directory; failures land in the folder-error dialog (Choose again reopens the flow). */
-  const adoptDirectory = (path: string): Promise<void> =>
-    createWorkspace({ path }).then((workspace) => {
+  const adoptDirectory = (directory: WorkspacePickedDirectory): Promise<void> =>
+    createWorkspace(typeof directory === 'string' ? { path: directory } : directory).then((workspace) => {
       setFlowOpen(false)
       onPick(workspace.workspaceId)
     }).catch((reason: unknown) => {
@@ -200,7 +209,9 @@ export function WorkspacePickFlow({
         getAnchorRect={getAnchorRect}
       />
       {open && !addIsTheOnlyEntry && !menuIsEmpty && workspaceSnapshot.phase === 'pending' && <div className={css.menuStatus} role="status">{t('picker.loading')}</div>}
-      {renderDirectoryFlow(flowOwner)}
+      {sshFlowAvailable && renderSshDirectoryFlow !== undefined
+        ? renderSshDirectoryFlow(flowOwner)
+        : renderDirectoryFlow(flowOwner)}
       <Modal
         open={errorOpen}
         onClose={closeModal}
@@ -236,6 +247,7 @@ export function WorkspacePicker({
   onClose,
   createWorkspace,
   useDirectoryFlow,
+  useSshDirectoryFlow,
   renderSlot,
   t,
 }: WorkspacePickerProps) {
@@ -247,7 +259,9 @@ export function WorkspacePicker({
       useWorkspaces={useWorkspaces}
       createWorkspace={createWorkspace}
       useDirectoryFlow={useDirectoryFlow}
+      useSshDirectoryFlow={useSshDirectoryFlow}
       renderDirectoryFlow={owner => renderSlot('conversation.hero.workspace.directoryFlow', owner)}
+      renderSshDirectoryFlow={owner => renderSlot('conversation.hero.workspace.sshDirectoryFlow', owner)}
       selectedId={selectedId}
       onPick={onPick}
       onClose={onClose}
