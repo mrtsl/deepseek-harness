@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RemoteResult, RemoteStreamHandle, SshHostFollowFrame, SshHostValue } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteResult, SshHostFollowFrame, SshHostValue } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteStreamHandle } from '@deepseek-ai/dsh-typert-protocol'
 import { SshHostStore } from '../src/client/ssh-host-store.ts'
 
 const ok = <T>(value: T): RemoteResult<T> => ({ ok: true, value })

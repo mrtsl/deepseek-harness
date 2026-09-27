@@ -35,6 +35,7 @@ beforeEach(() => {
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
 // lookup chain (namespace, then common vocabulary, then the key).
 const t: WorkspaceBrowserProps['t'] = makeTranslate(zh, commonZh)
+const useNoSshDirectoryFlow = bindSnapshotSelector({ getSnapshot: () => false, subscribe: () => () => {} }) as WorkspaceBrowserProps['useSshDirectoryFlow']
 
 const sid = (id: string) => id as SessionId
 const wid = (id: string) => id as WorkspaceId
@@ -135,6 +136,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     insertWorkspaceBefore: vi.fn(async () => {}),
     createWorkspace: vi.fn(async () => workspace('created', [])),
     useDirectoryFlow: bindSnapshotSelector({ getSnapshot: () => true, subscribe: () => () => {} }),
+    useSshDirectoryFlow: useNoSshDirectoryFlow,
     useHostInfo: selector => selector({ home: undefined, isLoopback: true }),
     renderSlot: renderDirectoryFlowOnly,
     t,

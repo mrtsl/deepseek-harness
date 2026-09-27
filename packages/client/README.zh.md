@@ -76,6 +76,7 @@ kind: "package-group"
 | [`ui-settings-general/`](ui-settings-general/README.zh.md) | 提供常规设置分区 | — |
 | [`ui-settings-models/`](ui-settings-models/README.zh.md) | 提供模型提供方配置与 DeepSeek 引导 | — |
 | [`ui-settings-shell/`](ui-settings-shell/README.zh.md) | 在插件页提供终端设置页 | — |
+| [`ui-settings-ssh-hosts/`](ui-settings-ssh-hosts/README.zh.md) | 在插件页提供局域网 SSH 主机设置页 | — |
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.zh.md) | 在插件页提供 Agent 循环设置页 | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.zh.md) | 在插件页提供子智能体设置页 | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.zh.md) | 在插件页提供网页搜索设置页 | — |
@@ -85,6 +86,7 @@ kind: "package-group"
 | [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 提供消息赞踩，以及从赞踩、`/feedback` 或会话标题栏菜单打开的反馈弹窗 | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动本地 Desktop 或 Host OS 选择器的原生目录选择界面 | — |
+| [`ui-directory-picker-ssh/`](ui-directory-picker-ssh/README.zh.md) | 面向已保存局域网 SSH 主机的远端目录选择界面 | — |
 | [`ui-open-in-app/`](ui-open-in-app/README.zh.md) | 在已安装应用中打开工作区目录的会话标题栏拆分按钮，以及文档预览里用默认应用打开单个文件的控件 | — |
 
 -----

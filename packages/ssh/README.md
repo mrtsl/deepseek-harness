@@ -11,6 +11,8 @@ English | [中文](README.zh.md)
 
 This family runs files, ordinary processes, terminals and sandbox enforcement on one POSIX SSH host while the Harness stays local. A shared OpenSSH connection and installed helper support the existing filesystem, subprocess and sandbox interfaces. Use it in headless or custom profiles whose consumers honor provider-owned paths.
 
+The Web app profile also composes the LAN SSH host manager, SSH Host Remote controller, SSH settings page and SSH directory picker. Saved LAN hosts can therefore be selected during workspace creation while the local native directory picker remains available.
+
 ## Table of Contents
 
 - [Packages](#packages)

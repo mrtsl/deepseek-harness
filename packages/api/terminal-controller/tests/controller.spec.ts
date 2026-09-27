@@ -82,7 +82,7 @@ describe('TerminalController', () => {
         done: remoteDone.promise,
         write: vi.fn(async () => {}),
         resize: vi.fn(async () => {}),
-        inspectActivity: vi.fn(async () => ({ state: 'unknown', revision: 0 })),
+        inspectActivity: vi.fn<SubprocessTerminalHandle['inspectActivity']>(async () => ({ state: 'unknown', revision: 0 })),
         inspectForeground: async () => undefined,
         signalForeground: async () => 321,
         terminate: vi.fn(async () => { remoteOutput.end(); remoteDone.resolve({ exitCode: 0, signal: null }) }),

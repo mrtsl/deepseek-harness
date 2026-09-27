@@ -24,7 +24,9 @@
 
 ## 组合范围
 
-headless 通过已挂载的文件系统提供方记录和检查 Session cwd。因此远端 FS、Bash、终端、LSP 及 PTC 消费方可以共享这些坐标。假定可访问主机文件系统的 Web 工作区视图需要单独集成；仅替换提供方并不会使这些视图支持远端。
+headless 通过已挂载的文件系统提供方记录和检查 Session cwd。因此远端 FS、Bash、终端、LSP 及 PTC 消费方可以共享这些坐标。
+
+Web/Desktop 配置组合现在在既有本地选择器旁包含局域网 SSH 主机管理器、SSH Host Remote 控制器、SSH 设置页和 SSH 目录选择器。主机记录由设置页管理；创建工作区时可以浏览已保存主机，并返回远端工作区身份。Session 打开、终端路由和 workspace-files 访问都会携带该工作区身份，因此浏览器界面使用远端提供方，而不是把路径当成本地路径处理。
 
 替代方案与验证责任见[决策记录](../../.agents/notes/implemented/architecture/2026-09-11-posix-ssh-runtime.zh.md)。
 

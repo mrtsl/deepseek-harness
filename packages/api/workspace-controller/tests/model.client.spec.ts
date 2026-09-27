@@ -19,6 +19,7 @@ import type {
   WorkspaceUnarchiveSessionRequest,
   WorkspaceUnpinSessionRequest,
   WorkspaceValue,
+  SshHostId,
   WorkspaceId,
   WorkspaceView,
 } from '../src/types.ts'
@@ -176,9 +177,10 @@ describe('ClientWorkspaceModel', () => {
   it('preserves workspace environments from baselines while local rows remain usable', () => {
     const model = modelFor()
     const local = workspace('local')
+    const hostId = 'host-1' as SshHostId
     const remote = workspace('remote', [], '2026-01-01T00:00:00.000Z', {
       kind: 'ssh',
-      hostId: 'host-1',
+      hostId,
       hostName: 'devbox',
     })
 
@@ -186,7 +188,7 @@ describe('ClientWorkspaceModel', () => {
 
     expect(model.getSnapshot().items).toMatchObject([
       { workspaceId: 'local' },
-      { workspaceId: 'remote', environment: { kind: 'ssh', hostId: 'host-1', hostName: 'devbox' } },
+      { workspaceId: 'remote', environment: { kind: 'ssh', hostId, hostName: 'devbox' } },
     ])
     expect(model.getSnapshot().items[0]?.environment).toBeUndefined()
   })

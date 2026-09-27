@@ -2399,6 +2399,9 @@ importers:
       '@deepseek-ai/dsh-api-settings-controller':
         specifier: workspace:*
         version: link:../../api/settings-controller
+      '@deepseek-ai/dsh-api-ssh-host-controller':
+        specifier: workspace:*
+        version: link:../../api/ssh-host-controller
       '@deepseek-ai/dsh-api-terminal-controller':
         specifier: workspace:*
         version: link:../../api/terminal-controller
@@ -2465,6 +2468,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-directory-picker-native':
         specifier: workspace:*
         version: link:../../client/ui-directory-picker-native
+      '@deepseek-ai/dsh-client-ui-directory-picker-ssh':
+        specifier: workspace:*
+        version: link:../../client/ui-directory-picker-ssh
       '@deepseek-ai/dsh-client-ui-goal':
         specifier: workspace:*
         version: link:../../client/ui-goal
@@ -2531,6 +2537,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings-shell':
         specifier: workspace:*
         version: link:../../client/ui-settings-shell
+      '@deepseek-ai/dsh-client-ui-settings-ssh-hosts':
+        specifier: workspace:*
+        version: link:../../client/ui-settings-ssh-hosts
       '@deepseek-ai/dsh-client-ui-settings-subagent':
         specifier: workspace:*
         version: link:../../client/ui-settings-subagent
@@ -2666,6 +2675,9 @@ importers:
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:*
         version: link:../../skill/skill-filesystem
+      '@deepseek-ai/dsh-ssh-hosts':
+        specifier: workspace:*
+        version: link:../../ssh/ssh-hosts
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:*
         version: link:../../subprocess/subprocess

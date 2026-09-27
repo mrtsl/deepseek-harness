@@ -3,6 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { SshHostId } from '@deepseek-ai/dsh-api-workspace-controller/types'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
@@ -16,7 +17,7 @@ usePinnedBrowserLanguages('zh-CN')
 afterEach(cleanup)
 
 const HOLES = ['conversation.hero.workspace.sshDirectoryFlow', 'sidebar.workspaces.sshDirectoryFlow'] as const
-const HOST_ID = 'host-1'
+const HOST_ID = 'host-1' as SshHostId
 const HOME = '/home/alice'
 const REPO = `${HOME}/repo`
 
@@ -34,7 +35,7 @@ async function bench() {
   ctx.provide('locale', new LocaleRuntime(ctx))
   const listHosts = vi.fn(async () => ({ ok: true, value: [{ id: HOST_ID, status: 'connected' }] }))
   const list = vi.fn(async () => ({ ok: true, value: homeListing }))
-  const createDirectory = vi.fn(async (hostId: string, path: string, name: string) => ({ ok: true, value: `${path}/${name}` }))
+  const createDirectory = vi.fn(async (_hostId: SshHostId, path: string, name: string) => ({ ok: true, value: `${path}/${name}` }))
   ctx.provide('remote', { sshHosts: { list: listHosts }, sshDirectoryPicker: { list, createDirectory } } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
@@ -77,9 +78,9 @@ describe('directory-picker-ssh client half', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries(HOLES[0])[0]!
     const injected = (entry.inject as () => {
-      loadHost: () => Promise<{ id: string } | null>
-      listDirectory: (hostId: string, path?: string, signal?: AbortSignal) => Promise<DirectoryListing>
-      createDirectory: (hostId: string, path: string, name: string) => Promise<string>
+      loadHost: () => Promise<{ id: SshHostId } | null>
+      listDirectory: (hostId: SshHostId, path?: string, signal?: AbortSignal) => Promise<DirectoryListing>
+      createDirectory: (hostId: SshHostId, path: string, name: string) => Promise<string>
     })()
 
     await expect(injected.loadHost()).resolves.toMatchObject({ id: HOST_ID })

@@ -23,6 +23,7 @@ afterEach(cleanup)
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
 // lookup chain (namespace, then common vocabulary, then the key).
 const t: WorkspacePickerProps['t'] = makeTranslate(zh, commonZh)
+const useNoSshDirectoryFlow = bindSnapshotSelector({ getSnapshot: () => false, subscribe: () => () => {} }) as WorkspacePickerProps['useSshDirectoryFlow']
 
 const wid = (id: string) => id as WorkspaceId
 function workspace(id: string, title = id): WorkspaceView {
@@ -77,6 +78,7 @@ function occupancySource(initial = true) {
   })
   return {
     useDirectoryFlow,
+    useSshDirectoryFlow: useNoSshDirectoryFlow,
     flip: (next: boolean) => {
       occupied = next
       for (const listener of [...listeners]) listener()
@@ -106,6 +108,7 @@ function mount(
       onClose={onClose}
       createWorkspace={createWorkspace}
       useDirectoryFlow={occupancy.useDirectoryFlow}
+      useSshDirectoryFlow={occupancy.useSshDirectoryFlow}
       renderSlot={renderSlot}
       t={t}
     />
@@ -239,6 +242,7 @@ describe('WorkspacePicker', () => {
 
   it('waits to show its menu until an optional anchor is available', () => {
     const { renderSlot } = flowProbe()
+    const occupancy = occupancySource()
     render(
       <WorkspacePicker
         open useSessions={hook(sessions)} useWorkspaces={hook(workspaceState([workspace('alpha', 'Alpha')]))}
@@ -246,7 +250,9 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
-        useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
+        useDirectoryFlow={occupancy.useDirectoryFlow}
+        useSshDirectoryFlow={occupancy.useSshDirectoryFlow}
+        renderSlot={renderSlot} t={t}
       />,
     )
     expect(screen.queryByRole('menu')).toBeNull()
@@ -257,6 +263,7 @@ describe('WorkspacePicker', () => {
       ...workspaceState([]), phase: 'pending', state: 'loading',
     }
     const { renderSlot } = flowProbe()
+    const occupancy = occupancySource()
     render(
       <WorkspacePicker
         open anchorRef={anchor()} useSessions={hook(sessions)} useWorkspaces={hook(state)}
@@ -264,7 +271,9 @@ describe('WorkspacePicker', () => {
         useSessionRetainInfo={() => undefined}
         usePanelInfo={usePanelInfo} useResource={useResource}
         onPick={vi.fn()} onClose={vi.fn()} createWorkspace={vi.fn()}
-        useDirectoryFlow={occupancySource().useDirectoryFlow} renderSlot={renderSlot} t={t}
+        useDirectoryFlow={occupancy.useDirectoryFlow}
+        useSshDirectoryFlow={occupancy.useSshDirectoryFlow}
+        renderSlot={renderSlot} t={t}
       />,
     )
     // An empty list is not final yet: jumping into the directory flow here

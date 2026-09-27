@@ -94,6 +94,11 @@
     - id: directory-picker
       name: '@deepseek-ai/dsh-host-directory-picker-auto'
 
+    # LAN-only SSH host records and remote execution contexts. Local directory
+    # picking stays mounted above; this adds the remote workspace path.
+    - id: ssh-hosts
+      name: '@deepseek-ai/dsh-ssh-hosts'
+
     # Read-only projection of current Loader entries for trusted client RPCs.
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
@@ -112,6 +117,10 @@
       name: '@deepseek-ai/dsh-api-terminal-controller'
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
+
+    # SSH host management and remote directory browsing over Typert Remote.
+    - id: ssh-host-controller
+      name: '@deepseek-ai/dsh-api-ssh-host-controller'
 
     # Durable Host-wide reminders. The Schedule service owns the task store and
     # delivers each due occurrence as a follow-up in its original Session;
@@ -337,6 +346,10 @@
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
 
+    # Remote workspace creation through saved LAN SSH hosts.
+    - id: ui-directory-picker-ssh
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-ssh'
+
     # Durable workflow lifecycle as an independent Chat node after the
     # existing generic workflow tool row.
     - id: ui-workflow-run
@@ -413,6 +426,9 @@
 
     - id: ui-settings-web-search
       name: '@deepseek-ai/dsh-client-ui-settings-web-search'
+
+    - id: ui-settings-ssh-hosts
+      name: '@deepseek-ai/dsh-client-ui-settings-ssh-hosts'
 
     # Plan control: the composer plan seat over the plan projection + /plan channel.
     - id: ui-plan

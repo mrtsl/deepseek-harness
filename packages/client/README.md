@@ -76,6 +76,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-settings-general/`](ui-settings-general/README.md) | Provides the general settings section | — |
 | [`ui-settings-models/`](ui-settings-models/README.md) | Provides model-provider configuration and DeepSeek onboarding | — |
 | [`ui-settings-shell/`](ui-settings-shell/README.md) | Provides the shell settings page on the Plugins page | — |
+| [`ui-settings-ssh-hosts/`](ui-settings-ssh-hosts/README.md) | Provides the LAN SSH hosts settings page on the Plugins page | — |
 | [`ui-settings-agent-loop/`](ui-settings-agent-loop/README.md) | Provides the agent-loop settings page on the Plugins page | — |
 | [`ui-settings-subagent/`](ui-settings-subagent/README.md) | Provides the Subagent settings page on the Plugins page | — |
 | [`ui-settings-web-search/`](ui-settings-web-search/README.md) | Provides the web-search settings page on the Plugins page | — |
@@ -85,6 +86,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-message-feedback/`](ui-message-feedback/README.md) | Provides message ratings and feedback dialogs opened from ratings, `/feedback`, or the Session Header menu | `ctx.feedbackUi` |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.md) | In-app directory browsing surface for the workspace directory flow | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.md) | Native directory-picker surface driving the local Desktop or Host OS chooser | — |
+| [`ui-directory-picker-ssh/`](ui-directory-picker-ssh/README.md) | Remote directory-picker surface for saved LAN SSH hosts | — |
 | [`ui-open-in-app/`](ui-open-in-app/README.md) | Session-header split button opening the workspace directory in an installed application, and the document preview's default-application controls for one file | — |
 
 -----

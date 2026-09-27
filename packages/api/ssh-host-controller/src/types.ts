@@ -1,5 +1,6 @@
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+import type {} from '@deepseek-ai/dsh-typert-protocol'
 
 export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 

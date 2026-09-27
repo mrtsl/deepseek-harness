@@ -11,6 +11,8 @@ kind: "package-group"
 
 本家族将文件、普通进程、终端及沙箱执行放在同一台 POSIX SSH 主机上，Harness 保留在本地。共享 OpenSSH 连接与已安装辅助程序支持现有文件系统、子进程及沙箱接口。适用于消费方遵守提供方路径语义的 headless 或自定义配置组合。
 
+Web app 配置组合也默认包含局域网 SSH 主机管理器、SSH Host Remote 控制器、SSH 设置页和 SSH 目录选择器。因此创建工作区时可以选择已保存的局域网主机，同时保留本地原生目录选择器。
+
 ## 目录
 
 - [包](#packages)

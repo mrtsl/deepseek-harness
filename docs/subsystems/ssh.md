@@ -24,7 +24,9 @@ Administrative deadlines bound individual RPC observations; they do not replace 
 
 ## Composition scope
 
-Headless records and checks Session cwd through the mounted filesystem provider. Remote FS, Bash, terminal, LSP and PTC consumers can therefore share those coordinates. Web workspace views that assume host filesystem access need separate integration; replacing providers alone does not make those views remote-aware.
+Headless records and checks Session cwd through the mounted filesystem provider. Remote FS, Bash, terminal, LSP and PTC consumers can therefore share those coordinates.
+
+The Web/Desktop profile now includes the LAN SSH host manager, SSH Host Remote controller, SSH settings page and SSH directory picker beside the existing local picker. Host records live in Settings; workspace creation can browse a saved host and returns a remote workspace identity. Session opening, terminal routing and workspace-files access carry that workspace identity so browser surfaces use the remote provider instead of treating the path as local.
 
 See the [decision record](../../.agents/notes/implemented/architecture/2026-09-11-posix-ssh-runtime.md) for the alternatives and verification obligations.
 

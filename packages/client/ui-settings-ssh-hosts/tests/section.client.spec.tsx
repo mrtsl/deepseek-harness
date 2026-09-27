@@ -2,16 +2,19 @@
 import { useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SshHostValue } from '@deepseek-ai/dsh-api-remotes/client'
-import { SshHostsSection } from '../src/client/SshHostsSection.tsx'
-import type { SshHostSnapshot } from '../src/client/ssh-host-store.ts'
+import { SshHostsSection, type SshHostsSectionProps } from '../src/client/SshHostsSection.tsx'
+import type { SshHostSnapshot, SshHostStore } from '../src/client/ssh-host-store.ts'
 import { en, type SshHostsLocaleKey } from '../src/client/locales.ts'
+import type {} from '../src/client/index.ts'
 
 afterEach(cleanup)
 
-const t = (key: SshHostsLocaleKey): string => en[key]
+const t: SshHostsSectionProps['t'] = key => en[key as SshHostsLocaleKey] ?? key
+const standard = {} as GlobalStandardProps
 
 function host(overrides: Partial<SshHostValue> = {}): SshHostValue {
   return {
@@ -40,13 +43,14 @@ describe('SshHostsSection', () => {
       disconnect: vi.fn(async () => {}),
       delete: vi.fn(async () => {}),
       save: vi.fn(async () => {}),
-    } as never
+    } as unknown as SshHostStore
 
     render(
       <SshHostsSection
         controller={controller}
         useHosts={selector => useStore(store, selector)}
         t={t}
+        {...standard}
         close={vi.fn()}
       />,
     )

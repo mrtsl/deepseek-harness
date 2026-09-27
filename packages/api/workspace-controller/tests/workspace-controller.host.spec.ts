@@ -8,7 +8,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SshHostId, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import WorkspaceController from '../src/index.ts'
 import { DEFAULT_WORKSPACE_DIRECTORY } from '../src/default-workspace.ts'
 import { WorkspaceFeed } from '../src/feed.ts'
@@ -139,23 +139,24 @@ describe('WorkspaceController commands', () => {
   it('creates SSH workspaces through the host manager canonical path', async () => {
     const { controller, ctx } = await harness()
     const { realpathDirectory } = provideSshHosts(ctx)
+    const hostId = 'host-1' as SshHostId
 
     const created = await controller.create({
       path: '/repo',
-      environment: { kind: 'ssh', hostId: 'host-1' },
+      environment: { kind: 'ssh', hostId },
     })
 
-    expect(realpathDirectory).toHaveBeenCalledWith('host-1', '/repo')
+    expect(realpathDirectory).toHaveBeenCalledWith(hostId, '/repo')
     expect(created).toMatchObject({
       created: true,
       workspace: {
         path: '/canonical/repo',
-        environment: { kind: 'ssh', hostId: 'host-1', hostName: 'devbox' },
+        environment: { kind: 'ssh', hostId, hostName: 'devbox' },
       },
     })
     await expect(controller.create({
       path: '/repo',
-      environment: { kind: 'ssh', hostId: 'host-1' },
+      environment: { kind: 'ssh', hostId },
     })).resolves.toMatchObject({
       created: false,
       workspace: { workspaceId: created.workspace.workspaceId },
@@ -165,14 +166,15 @@ describe('WorkspaceController commands', () => {
   it('rejects relative and Windows-style SSH workspace paths before resolving the host', async () => {
     const { controller, ctx } = await harness()
     const { realpathDirectory } = provideSshHosts(ctx)
+    const hostId = 'host-1' as SshHostId
 
     await expect(controller.create({
       path: 'repo',
-      environment: { kind: 'ssh', hostId: 'host-1' },
+      environment: { kind: 'ssh', hostId },
     })).rejects.toMatchObject({ code: 'workspace/invalid-path', details: { path: 'repo' } })
     await expect(controller.create({
       path: 'C:\\repo',
-      environment: { kind: 'ssh', hostId: 'host-1' },
+      environment: { kind: 'ssh', hostId },
     })).rejects.toMatchObject({ code: 'workspace/invalid-path', details: { path: 'C:\\repo' } })
     expect(realpathDirectory).not.toHaveBeenCalled()
   })
