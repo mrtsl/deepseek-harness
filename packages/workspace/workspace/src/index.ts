@@ -183,6 +183,7 @@ export class WorkspaceRegistry extends Service {
   private readonly host: WorkspaceEntityHost = {
     table: () => this.requireTable(),
     sessionPath: id => this.sessionPaths.get(id),
+    sessionHeader: id => this.headers.get(id),
     readSessionHeader: id => this.readSessionHeader(id),
     rememberSessionPath: (id, path) => {
       this.sessionPaths.set(id, path)
@@ -853,6 +854,10 @@ export class WorkspaceRegistry extends Service {
       this.invalidSessionPaths.set(header.id, 'header has no cwd')
       return
     }
+    if (header.workspaceId !== undefined) {
+      this.invalidSessionPaths.delete(header.id)
+      return
+    }
     try {
       const path = await realpathNormalize(header.cwd)
       if (!(await stat(path)).isDirectory()) {
@@ -883,7 +888,7 @@ export class WorkspaceRegistry extends Service {
       const record = this.requireTable().get(entity.id) as WorkspaceRecord
       for (const sessionId of record.sessionIds) {
         const path = this.sessionPaths.get(sessionId)
-        if (path === record.path) continue
+        if (this.recordAcceptsSession(entity.id, record, sessionId)) continue
         const reason = this.invalidSessionPaths.get(sessionId)
           ?? (this.headers.has(sessionId)
             ? `canonical cwd '${path}' differs from workspace path '${record.path}'`
@@ -921,6 +926,14 @@ export class WorkspaceRegistry extends Service {
   private requireState(): WorkspaceDomainState {
     if (this.state === undefined) throw new Error('workspace registry is not started yet')
     return this.state
+  }
+
+  private recordAcceptsSession(workspaceId: WorkspaceId, record: WorkspaceRecord, sessionId: SessionId): boolean {
+    if (record.environment?.kind === 'ssh') {
+      const header = this.headers.get(sessionId)
+      return header !== undefined && header.workspaceId === workspaceId && header.cwd === record.path
+    }
+    return this.sessionPaths.get(sessionId) === record.path
   }
 
   private async setState(state: WorkspaceDomainState): Promise<void> {

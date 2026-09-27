@@ -47,6 +47,13 @@ export interface WorkspaceEntityHost {
   sessionPath(id: SessionId): string | undefined
 
   /**
+   * Read the last indexed live or stored header synchronously.
+   * @param id - Session whose header is needed for environment-aware membership.
+   * @returns cached header, or undefined when the session is unknown.
+   */
+  sessionHeader(id: SessionId): SessionHeader | undefined
+
+  /**
    * Read one stored session header for attach validation.
    * @param id - The session whose header to read.
    * @returns the header; rejects when session persistence is absent or holds
@@ -103,7 +110,7 @@ export class WorkspaceEntity implements Workspace {
   }
 
   get sessionIds(): readonly SessionId[] {
-    return this.record.sessionIds.filter(id => this.host.sessionPath(id) === this.record.path)
+    return this.record.sessionIds.filter(id => this.matchesRecord(this.record, id))
   }
 
   async setTitle(title: string): Promise<void> {
@@ -122,6 +129,24 @@ export class WorkspaceEntity implements Workspace {
           `cannot attach session '${sessionId}' to workspace '${this.record.path}': `
           + 'its stored header carries no cwd to validate against',
         )
+      }
+      if (this.record.environment?.kind === 'ssh') {
+        if (header.workspaceId !== this.id) {
+          throw new Error(
+            `cannot attach session '${sessionId}' to SSH workspace '${this.id}': `
+            + `its stored header belongs to workspace '${header.workspaceId ?? 'none'}'`,
+          )
+        }
+        if (header.cwd !== this.record.path) {
+          throw new Error(
+            `cannot attach session '${sessionId}' to SSH workspace '${this.record.path}': `
+            + `its cwd is '${header.cwd}'`,
+          )
+        }
+        await this.mutate(record => record.sessionIds.includes(sessionId)
+          ? record
+          : { ...record, sessionIds: [sessionId, ...record.sessionIds] })
+        return
       }
       let cwd: string
       try {
@@ -209,9 +234,7 @@ export class WorkspaceEntity implements Workspace {
     try {
       next = await this.host.table().update(this.id, (current) => {
         const changed = fn(current)
-        const sessionIds = changed.sessionIds.filter(
-          id => this.host.sessionPath(id) === changed.path,
-        )
+        const sessionIds = changed.sessionIds.filter(id => this.matchesRecord(changed, id))
         if (changed === current && sessionIds.length === current.sessionIds.length) {
           throw unchangedSentinel
         }
@@ -222,5 +245,13 @@ export class WorkspaceEntity implements Workspace {
       throw error
     }
     this.record = next
+  }
+
+  private matchesRecord(record: WorkspaceRecord, sessionId: SessionId): boolean {
+    if (record.environment?.kind === 'ssh') {
+      const header = this.host.sessionHeader(sessionId)
+      return header !== undefined && header.workspaceId === this.id && header.cwd === record.path
+    }
+    return this.host.sessionPath(sessionId) === record.path
   }
 }

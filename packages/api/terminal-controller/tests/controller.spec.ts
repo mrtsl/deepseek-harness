@@ -62,6 +62,42 @@ describe('TerminalController', () => {
     await controller.close(agent, id)
   })
 
+  it('creates terminals with the subprocess provider scoped to the Agent context', async () => {
+    const { controller, subprocess: localSubprocess } = fixture()
+    const remoteCtx = new Context()
+    roots.push(remoteCtx)
+    remoteCtx.provide('sandboxPolicy', {
+      defaultMode: 'danger-full-access',
+      workspaceRoot: '/repo',
+      resolve: () => ({ mode: 'danger-full-access', workspaceRoot: '/repo' }),
+    } as never)
+    const remoteOutput = new PassThrough()
+    const remoteDone = Promise.withResolvers<{ exitCode: number; signal: null }>()
+    const remoteSubprocess = {
+      terminalEnvironment: vi.fn(async (): Promise<SubprocessTerminalEnvironment> => ({ platform: 'posix', defaultShell: '/bin/zsh' })),
+      resolveExecutable: vi.fn(async (path: string) => path),
+      spawnTerminal: vi.fn(async (): Promise<SubprocessTerminalHandle> => ({
+        pid: 321,
+        output: remoteOutput,
+        done: remoteDone.promise,
+        write: vi.fn(async () => {}),
+        resize: vi.fn(async () => {}),
+        inspectActivity: vi.fn(async () => ({ state: 'unknown', revision: 0 })),
+        inspectForeground: async () => undefined,
+        signalForeground: async () => 321,
+        terminate: vi.fn(async () => { remoteOutput.end(); remoteDone.resolve({ exitCode: 0, signal: null }) }),
+      })),
+    }
+    remoteCtx.provide('subprocess', remoteSubprocess as never)
+    const agent = owner(remoteCtx, 'ssh-session', '/repo')
+
+    await controller.create(agent, request, signal())
+
+    expect(remoteSubprocess.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/repo' }))
+    expect(localSubprocess.spawnTerminal).not.toHaveBeenCalled()
+    await controller.close(agent, id)
+  })
+
   it('creates the environment default shell and keeps an existing identity when that default changes', async () => {
     const { controller, agent, subprocess } = fixture({ shell: undefined })
     subprocess.terminalEnvironment.mockResolvedValue({ platform: 'posix', defaultShell: '/usr/local/bin/zsh' })

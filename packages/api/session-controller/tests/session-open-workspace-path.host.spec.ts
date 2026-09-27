@@ -2,10 +2,13 @@ import { resolve } from 'node:path'
 import * as nativeCommand from '@deepseek-ai/dsh-native-command'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
 import SessionStore from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import FsLocal from '@deepseek-ai/dsh-fs-local'
 import { onTestFinished } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
+import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import {
   createSessionTestController,
   createSessionTestRemote,
@@ -68,6 +71,58 @@ describe('session/openWorkspacePath', () => {
       .resolves.toEqual({ ok: true, value: { opened: true } })
     expect(openPath).toHaveBeenCalledWith(resolve('/workspace/project/src/a.ts'), signal)
     expect(ctx.agents.list()).toEqual([])
+  })
+
+  it('creates an SSH workspace Session with the remote cwd, scoped providers, and workspace id', async () => {
+    const ctx = await context()
+    const remoteCtx = new Context()
+    onTestFinished(() => remoteCtx.fiber.dispose())
+    const remoteFs = {
+      resolve: vi.fn(async (path: string) => ({ targetKey: path })),
+      stat: vi.fn(async () => ({ type: 'directory', version: 'remote-v1' })),
+      processPath: vi.fn((target: { targetKey: string }) => target.targetKey),
+    }
+    const remoteSubprocess = { marker: 'remote-subprocess' }
+    const remoteSandbox = { workspaceRoot: '/repo', resolve: () => ({ mode: 'danger-full-access', workspaceRoot: '/repo' }) }
+    remoteCtx.provide('fs', remoteFs as never)
+    remoteCtx.provide('subprocess', remoteSubprocess as never)
+    remoteCtx.provide('sandboxPolicy', remoteSandbox as never)
+    const sshHostManager = { execution: vi.fn(() => remoteCtx) }
+    const workspace = {
+      id: 'w-ssh',
+      path: '/repo',
+      environment: { kind: 'ssh', hostId: 'host-1' },
+      attachSession: vi.fn(async () => {}),
+    } as unknown as Workspace
+    ctx.provide('sshHostManager', sshHostManager as never)
+    ctx.provide('workspaceRegistry', { get: vi.fn(() => workspace) } as never)
+    let createdAgent: Agent | undefined
+    const factory: AgentFactory = {
+      createAgent: async (_ownerCtx, options) => {
+        const session = ctx.sessions.create(options.sessionId, options.meta === undefined ? {} : { meta: options.meta })
+        const agentCtx = new Context()
+        const agent = { id: session.id, session, status: 'idle', ctx: agentCtx } as unknown as Agent
+        await options.setup?.(agentCtx, agent)
+        await ctx.agents.register(agent)
+        createdAgent = agent
+        return { agent, dispose: async () => {} }
+      },
+      resume: () => Promise.reject(new Error('test does not resume sessions')),
+    }
+    ctx.agents.setFactory(factory)
+    const remote = createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
+      cwd: '/default',
+    })
+
+    const result = await remote.create({ workspaceId: 'w-ssh' as never, sessionId: SessionId('ssh-session') })
+
+    expect(result).toEqual({ ok: true, value: { sessionId: SessionId('ssh-session') } })
+    expect(sshHostManager.execution).toHaveBeenCalledWith('host-1')
+    expect(remoteFs.resolve).toHaveBeenCalledWith('/repo', expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(ctx.sessions.get(SessionId('ssh-session'))?.header).toMatchObject({ cwd: '/repo', workspaceId: 'w-ssh' })
+    expect(createdAgent?.ctx.get('subprocess')).toBe(remoteSubprocess)
+    expect(workspace.attachSession).toHaveBeenCalledWith(SessionId('ssh-session'))
   })
 
   it('normalizes relative and absolute Host-resolvable paths', async () => {

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { failureOf, openWorkspace, signal, type Harness } from './harness.ts'
 
@@ -54,6 +55,28 @@ describe('workspaceFiles.read — the happy path', () => {
     await writeFile(join(workspace, 'src', 'deep', 'a.ts'), 'export {}\n', 'utf8')
     const result = await endpoint().read(harness.scope, 'src/deep/a.ts', {}, signal())
     expect(result.text).toBe('export {}')
+  })
+
+  it('reads through an SSH scope filesystem instead of the local service filesystem', async () => {
+    const remoteCtx = new Context()
+    const remoteTarget = { targetKey: '/repo/notes.txt' }
+    const remoteFs = {
+      resolve: vi.fn(async () => remoteTarget),
+      lstat: vi.fn(async () => ({ type: 'file' })),
+      stat: vi.fn(async () => ({ type: 'file', version: 'remote-v1', size: 13 })),
+      streamText: vi.fn(async function* () { yield 'remote\nnotes\n' }),
+      processPath: vi.fn(() => '/repo/notes.txt'),
+    }
+    remoteCtx.provide('fs', remoteFs as never)
+    const localLstat = vi.spyOn(harness.ctx.fs, 'lstat')
+    const scope = { ...harness.scope, workspaceRoot: '/repo', execution: remoteCtx } as never
+
+    const result = await endpoint().read(scope, 'notes.txt', {}, signal())
+
+    expect(result).toMatchObject({ absolutePath: '/repo/notes.txt', text: 'remote\nnotes', version: 'remote-v1' })
+    expect(remoteFs.lstat).toHaveBeenCalledWith('notes.txt', { cwd: '/repo' }, expect.any(AbortSignal))
+    expect(localLstat).not.toHaveBeenCalled()
+    await remoteCtx.fiber.dispose()
   })
 
   it('returns an empty page for an empty file', async () => {

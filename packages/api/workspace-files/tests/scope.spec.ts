@@ -12,7 +12,7 @@ const CAPS = {
   maxEntries: 100,
 }
 
-function header(id: SessionId, cwd?: string): SessionHeader {
+function header(id: SessionId, cwd?: string, workspaceId?: string): SessionHeader {
   return {
     version: SESSION_FORMAT_VERSION,
     id,
@@ -20,6 +20,7 @@ function header(id: SessionId, cwd?: string): SessionHeader {
     isSeeded: false,
     origin: 'subagent',
     ...cwd === undefined ? {} : { cwd },
+    ...workspaceId === undefined ? {} : { workspaceId },
   }
 }
 
@@ -66,6 +67,33 @@ describe('Workspace Files Session scope lookup', () => {
 
       await workspaceFiles.dispose()
       expect(ctx.typert.lookups.get('workspaceFileScope')).toBeUndefined()
+    } finally {
+      await workspaceFiles.dispose()
+      await sessions.dispose()
+      await typert.dispose()
+    }
+  })
+
+  it('rejects SSH workspace scopes when the host has no execution context', async () => {
+    const sessionId = SessionId('ssh-offline')
+    const ctx = new Context()
+    ctx.provide('fs', {} as never)
+    ctx.provide('sandboxPolicy', { workspaceRoot: '/fallback' } as never)
+    ctx.provide('sessionPersistence', { stat: async () => ({ header: header(sessionId, '/repo', 'w-ssh') }) } as never)
+    ctx.provide('workspaceRegistry', {
+      get: () => ({ id: 'w-ssh', path: '/repo', environment: { kind: 'ssh', hostId: 'host-1' } }),
+    } as never)
+    ctx.provide('sshHostManager', {
+      execution: () => { throw new Error('SSH host \'host-1\' is not connected') },
+    } as never)
+    const sessions = await ctx.plugin(SessionStore)
+    const typert = await ctx.plugin(TypertRegistry)
+    const workspaceFiles = await ctx.plugin(WorkspaceFiles, CAPS)
+    try {
+      const lookup = ctx.typert.lookups.get('workspaceFileScope')
+      if (lookup === undefined) throw new Error('workspaceFileScope lookup did not register')
+
+      await expect(lookup.resolve(sessionId)).rejects.toThrow('not connected')
     } finally {
       await workspaceFiles.dispose()
       await sessions.dispose()

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { Context } from '@deepseek-ai/cordis'
 import { failureOf, openWorkspace, signal, type Harness } from './harness.ts'
 
 let harness: Harness
@@ -43,6 +44,28 @@ describe('workspaceFiles.list — the happy path', () => {
     const listing = await endpoint().list(harness.scope, workspace, signal())
     expect(listing.path).toBe('')
     expect(listing.entries).toEqual([])
+  })
+
+  it('lists through an SSH scope filesystem instead of the local service filesystem', async () => {
+    const remoteCtx = new Context()
+    const root = { targetKey: '/repo' }
+    const child = { targetKey: '/repo/src' }
+    const remoteFs = {
+      resolve: async (path: string) => path === '/repo' || path === '.' ? root : child,
+      lstat: async () => ({ type: 'directory' }),
+      stat: async () => ({ type: 'directory', version: 'remote-v1' }),
+      contains: () => true,
+      listDir: async () => [{ name: 'src', type: 'directory', target: child }],
+      fileUrl: (target: { targetKey: string }) => `file://${target.targetKey}`,
+      processPath: (target: { targetKey: string }) => target.targetKey,
+    }
+    remoteCtx.provide('fs', remoteFs as never)
+    const scope = { ...harness.scope, workspaceRoot: '/repo', execution: remoteCtx } as never
+
+    const listing = await endpoint().list(scope, '.', signal())
+
+    expect(listing).toEqual({ path: '', entries: [{ name: 'src', type: 'directory' }], truncated: false })
+    await remoteCtx.fiber.dispose()
   })
 
   it('reports a nested directory as its `/`-joined path relative to the root, decoded', async () => {

@@ -24,12 +24,14 @@ import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
+import { executionContextForWorkspace } from './execution.ts'
 import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
   ApiSessionNotFound,
   ApiSessionPresetConflict,
   ApiSessionSubagentOwnership,
+  ApiSessionWorkspaceConflict,
   apiSessionSubagentOwnershipError,
   hasApiSessionSubagentOwner,
   inspectApiSession,
@@ -117,6 +119,7 @@ export class SessionCommandController {
       }
     }
     const cwd = workspace?.path ?? request.cwd ?? this.defaultCwd
+    const executionCtx = workspace === undefined ? this.ctx : executionContextForWorkspace(this.ctx, workspace)
     let adopted: Agent
     try {
       adopted = await this.agents.ensureSession(
@@ -124,6 +127,8 @@ export class SessionCommandController {
         cwd,
         request.sessionId !== undefined,
         request.agentPreset,
+        workspace?.id,
+        executionCtx,
       )
     } catch (error) {
       this.rejectCreation(sessionId, error)
@@ -547,6 +552,13 @@ export class SessionCommandController {
         sessionId: error.sessionId,
         requestedCwd: error.requestedCwd,
         ...(error.existingCwd === undefined ? {} : { existingCwd: error.existingCwd }),
+      })
+    }
+    if (error instanceof ApiSessionWorkspaceConflict) {
+      throw new RemoteError('session/conflict', error.message, {
+        sessionId: error.sessionId,
+        requestedWorkspaceId: error.requestedWorkspaceId,
+        ...(error.existingWorkspaceId === undefined ? {} : { existingWorkspaceId: error.existingWorkspaceId }),
       })
     }
     if (error instanceof ApiSessionSubagentOwnership) {

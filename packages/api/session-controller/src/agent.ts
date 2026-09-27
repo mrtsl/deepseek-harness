@@ -8,12 +8,15 @@ import type {
 } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
+import type {} from '@deepseek-ai/dsh-fs'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
+import { WorkspaceId, type Workspace } from '@deepseek-ai/dsh-workspace'
+import { executionContextForWorkspace, installExecutionProviders } from './execution.ts'
 import type { ModelSelection } from './types.ts'
 
 /** Cold Session identity absent from persistence. */
@@ -53,6 +56,21 @@ export class ApiSessionPresetConflict extends Error {
       existingPreset === undefined
         ? `session "${sessionId}" records no agent preset and cannot be adopted under "${requestedPreset}"`
         : `session "${sessionId}" runs agent preset "${existingPreset}", not "${requestedPreset}"`,
+    )
+  }
+}
+
+/** Explicit-id creation attempted to adopt a Session under another Workspace. */
+export class ApiSessionWorkspaceConflict extends Error {
+  constructor(
+    readonly sessionId: SessionId,
+    readonly requestedWorkspaceId: string,
+    readonly existingWorkspaceId: string | undefined,
+  ) {
+    super(
+      existingWorkspaceId === undefined
+        ? `session "${sessionId}" records no workspace and cannot be adopted for "${requestedWorkspaceId}"`
+        : `session "${sessionId}" belongs to workspace "${existingWorkspaceId}", not "${requestedWorkspaceId}"`,
     )
   }
 }
@@ -241,10 +259,12 @@ export class ApiSessionAgentController {
     cwd: string,
     checkPersistedIdentity: boolean,
     presetId?: string,
+    workspaceId?: string,
+    executionCtx: Context = this.ctx,
   ): Promise<Agent> {
     let creation = this.creations.get(sessionId)
     if (creation === undefined) {
-      creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId)
+      creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId, workspaceId, executionCtx)
         .catch((error: unknown) => {
           const live = this.ctx.agents.get(sessionId)
           if (live !== undefined) {
@@ -271,6 +291,9 @@ export class ApiSessionAgentController {
     }
     if (agent.session.header.cwd !== cwd) {
       throw new ApiSessionCwdConflict(sessionId, cwd, agent.session.header.cwd)
+    }
+    if (workspaceId !== undefined && agent.session.header.workspaceId !== workspaceId) {
+      throw new ApiSessionWorkspaceConflict(sessionId, workspaceId, agent.session.header.workspaceId)
     }
     return agent
   }
@@ -378,18 +401,22 @@ export class ApiSessionAgentController {
    * @param presetId - requested preset or the configured default when omitted.
    * @returns the resolved preset identity and Agent setup callback.
    */
-  async composeAgent(presetId: string | undefined): Promise<{
+  async composeAgent(presetId: string | undefined, executionCtx: Context = this.ctx): Promise<{
     readonly agentPreset?: string
     readonly setup: AgentSetup
   }> {
     const presets = this.ctx.get('agentPresets')
     if (presets === undefined) {
-      return { setup: (_agentCtx, agent) => { this.installSelection(agent) } }
+      return { setup: (agentCtx, agent) => {
+        installExecutionProviders(agentCtx, executionCtx)
+        this.installSelection(agent)
+      } }
     }
     const resolvedId = (await presets.resolve(presetId)).id
     return {
       agentPreset: resolvedId,
       setup: async (agentCtx, agent) => {
+        installExecutionProviders(agentCtx, executionCtx)
         this.installSelection(agent)
         await presets.mount(agentCtx, resolvedId)
       },
@@ -428,7 +455,8 @@ export class ApiSessionAgentController {
     if (hasApiSessionSubagentOwner(this.ctx, { header: observation.header }, undefined)) {
       throw new ApiSessionSubagentOwnership(sessionId)
     }
-    const composition = await this.composeAgent(this.presetForObservation(observation))
+    const executionCtx = this.executionContextForHeader(observation.header)
+    const composition = await this.composeAgent(this.presetForObservation(observation), executionCtx)
     const published = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
     if (published !== undefined && hasApiSessionSubagentOwner(this.ctx, published, live)) {
@@ -446,6 +474,8 @@ export class ApiSessionAgentController {
     cwd: string,
     checkPersistedIdentity: boolean,
     presetId: string | undefined,
+    workspaceId: string | undefined,
+    executionCtx: Context,
   ): Promise<Agent> {
     const attached = this.ctx.sessions.get(sessionId)
     const live = this.ctx.agents.get(sessionId)
@@ -463,9 +493,15 @@ export class ApiSessionAgentController {
         if (observation.header.cwd !== cwd) {
           throw new ApiSessionCwdConflict(sessionId, cwd, observation.header.cwd)
         }
+        if (workspaceId !== undefined && observation.header.workspaceId !== workspaceId) {
+          throw new ApiSessionWorkspaceConflict(sessionId, workspaceId, observation.header.workspaceId)
+        }
         const storedPreset = this.presetForObservation(observation)
         this.assertPresetUnchanged(sessionId, presetId, storedPreset)
-        const composition = await this.composeAgent(storedPreset)
+        const storedExecutionCtx = workspaceId === undefined
+          ? this.executionContextForHeader(observation.header)
+          : executionCtx
+        const composition = await this.composeAgent(storedPreset, storedExecutionCtx)
         return (await this.ctx.agents.resume({
           resumeSessionId: sessionId,
           agentOptions: this.agentOptions(),
@@ -478,16 +514,17 @@ export class ApiSessionAgentController {
     }
 
     try {
-      await mkdir(cwd, { recursive: true })
+      await this.ensureProjectDirectory(cwd, executionCtx)
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }
-    const composition = await this.composeAgent(presetId)
+    const composition = await this.composeAgent(presetId, executionCtx)
     return (await this.ctx.agents.create({
       sessionId,
       agentOptions: this.agentOptions(),
       meta: {
         cwd,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
         ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
       },
       setup: composition.setup,
@@ -497,6 +534,26 @@ export class ApiSessionAgentController {
   private agentOptions(): AgentOptions {
     const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
     return { provider, model }
+  }
+
+  private async ensureProjectDirectory(cwd: string, executionCtx: Context): Promise<void> {
+    if (executionCtx === this.ctx) {
+      await mkdir(cwd, { recursive: true })
+      return
+    }
+    const fs = executionCtx.get('fs')
+    if (fs === undefined) throw new Error('remote execution context has no filesystem provider')
+    const signal = new AbortController().signal
+    const target = await fs.resolve(cwd, { signal })
+    const info = await fs.stat(target, signal)
+    if (info?.type !== 'directory') throw new Error(`remote project directory "${cwd}" is not a directory`)
+  }
+
+  private executionContextForHeader(header: { readonly workspaceId?: string }): Context {
+    if (header.workspaceId === undefined) return this.ctx
+    const workspace = this.ctx.get('workspaceRegistry')?.get(WorkspaceId(header.workspaceId)) as Workspace | undefined
+    if (workspace === undefined) throw new Error(`workspace "${header.workspaceId}" not found for session resume`)
+    return executionContextForWorkspace(this.ctx, workspace)
   }
 
   private installSelection(agent: Agent): void {

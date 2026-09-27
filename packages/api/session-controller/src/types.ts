@@ -206,8 +206,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/model-unavailable': { readonly provider: string; readonly model: string }
     'session/conflict': {
       readonly sessionId: SessionId
-      readonly requestedCwd: string
+      readonly requestedCwd?: string
       readonly existingCwd?: string
+      readonly requestedWorkspaceId?: string
+      readonly existingWorkspaceId?: string
     }
     'session/projections-unavailable': Record<string, never>
     'session/writer-held': { readonly sessionId: SessionId }
