@@ -33,11 +33,13 @@ function workspace(
   id: string,
   sessionIds: readonly SessionId[] = [],
   updatedAt = '2026-01-01T00:00:00.000Z',
+  environment?: WorkspaceView['environment'],
 ): WorkspaceView {
   return {
     workspaceId: wid(id),
     path: `/w/${id}`,
     title: id,
+    ...(environment === undefined ? {} : { environment }),
     sessionIds,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt,
@@ -171,6 +173,24 @@ function baseline(
 }
 
 describe('ClientWorkspaceModel', () => {
+  it('preserves workspace environments from baselines while local rows remain usable', () => {
+    const model = modelFor()
+    const local = workspace('local')
+    const remote = workspace('remote', [], '2026-01-01T00:00:00.000Z', {
+      kind: 'ssh',
+      hostId: 'host-1',
+      hostName: 'devbox',
+    })
+
+    baseline(model, [local, remote])
+
+    expect(model.getSnapshot().items).toMatchObject([
+      { workspaceId: 'local' },
+      { workspaceId: 'remote', environment: { kind: 'ssh', hostId: 'host-1', hostName: 'devbox' } },
+    ])
+    expect(model.getSnapshot().items[0]?.environment).toBeUndefined()
+  })
+
   it('publishes the prepared Workspace and leaves the list unchanged on refusal', async () => {
     const remote = new FakeWorkspaceRemote()
     const model = modelFor(remote)

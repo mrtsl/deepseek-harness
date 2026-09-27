@@ -72,6 +72,15 @@ async function harness(options: { systemDocuments?: boolean } = {}) {
   return { controller, ctx, root, storageDomain }
 }
 
+function provideSshHosts(ctx: Context) {
+  const realpathDirectory = vi.fn(async (_hostId: string, path: string) => `/canonical${path}`)
+  ctx.provide('sshHostManager', {
+    realpathDirectory,
+    list: () => [{ id: 'host-1', name: 'devbox' }],
+  } as never)
+  return { realpathDirectory }
+}
+
 function stageDir(root: string, name: string): string {
   const path = join(root, name)
   mkdirSync(path, { recursive: true })
@@ -125,6 +134,47 @@ describe('WorkspaceController commands', () => {
       .rejects.toMatchObject({ code: 'workspace/name-conflict' })
     await expect(controller.delete({ workspaceId: 'missing' as WorkspaceId }))
       .rejects.toMatchObject({ code: 'workspace/not-found' })
+  })
+
+  it('creates SSH workspaces through the host manager canonical path', async () => {
+    const { controller, ctx } = await harness()
+    const { realpathDirectory } = provideSshHosts(ctx)
+
+    const created = await controller.create({
+      path: '/repo',
+      environment: { kind: 'ssh', hostId: 'host-1' },
+    })
+
+    expect(realpathDirectory).toHaveBeenCalledWith('host-1', '/repo')
+    expect(created).toMatchObject({
+      created: true,
+      workspace: {
+        path: '/canonical/repo',
+        environment: { kind: 'ssh', hostId: 'host-1', hostName: 'devbox' },
+      },
+    })
+    await expect(controller.create({
+      path: '/repo',
+      environment: { kind: 'ssh', hostId: 'host-1' },
+    })).resolves.toMatchObject({
+      created: false,
+      workspace: { workspaceId: created.workspace.workspaceId },
+    })
+  })
+
+  it('rejects relative and Windows-style SSH workspace paths before resolving the host', async () => {
+    const { controller, ctx } = await harness()
+    const { realpathDirectory } = provideSshHosts(ctx)
+
+    await expect(controller.create({
+      path: 'repo',
+      environment: { kind: 'ssh', hostId: 'host-1' },
+    })).rejects.toMatchObject({ code: 'workspace/invalid-path', details: { path: 'repo' } })
+    await expect(controller.create({
+      path: 'C:\\repo',
+      environment: { kind: 'ssh', hostId: 'host-1' },
+    })).rejects.toMatchObject({ code: 'workspace/invalid-path', details: { path: 'C:\\repo' } })
+    expect(realpathDirectory).not.toHaveBeenCalled()
   })
 
   it('preserves Remote failures and propagates unexpected registry failures', async () => {

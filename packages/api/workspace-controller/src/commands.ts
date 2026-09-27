@@ -1,5 +1,6 @@
 /** Workspace command implementation and stable Remote failure mapping. */
 
+import { posix } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import {
@@ -30,6 +31,10 @@ import type {
   WorkspaceValue,
 } from './types.ts'
 
+interface SshWorkspaceHostManager {
+  realpathDirectory(hostId: string, path: string): Promise<string>
+}
+
 /** Implements Workspace mutations against the authoritative registry. */
 export class WorkspaceCommands {
   private operationTail = Promise.resolve()
@@ -44,21 +49,17 @@ export class WorkspaceCommands {
    */
   create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
     return this.enqueue(async () => {
+      if (request.environment?.kind === 'ssh') return await this.createSsh(request)
       try {
         const existing = await this.ctx.workspaceRegistry.resolveByPath(request.path)
         if (existing !== undefined) {
-          return { workspace: workspaceView(existing), created: false }
+          return { workspace: workspaceView(existing, this.ctx), created: false }
         }
         const workspace = await this.ctx.workspaceRegistry.create(request.path)
-        return { workspace: workspaceView(workspace), created: true }
+        return { workspace: workspaceView(workspace, this.ctx), created: true }
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error
-        throw new RemoteError(
-          'workspace/invalid-path',
-          `cannot create a Workspace at "${request.path}": ${errorMessage(error)}`,
-          { path: request.path },
-          { cause: error },
-        )
+        throw workspaceInvalidPath(request.path, error)
       }
     })
   }
@@ -86,7 +87,7 @@ export class WorkspaceCommands {
         }
         await workspace.setTitle(title)
       }
-      return { workspace: workspaceView(workspace) }
+      return { workspace: workspaceView(workspace, this.ctx) }
     })
   }
 
@@ -148,7 +149,7 @@ export class WorkspaceCommands {
         { cause: error },
       )
     }
-    return { workspace: workspaceView(workspace) }
+    return { workspace: workspaceView(workspace, this.ctx) }
   }
 
   /**
@@ -237,6 +238,27 @@ export class WorkspaceCommands {
     this.operationTail = result.then(() => undefined, () => undefined)
     return result
   }
+
+  private async createSsh(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue> {
+    const environment = request.environment
+    if (environment?.kind !== 'ssh') throw new Error('internal invariant: createSsh requires SSH environment')
+    if (!posix.isAbsolute(request.path)) throw workspaceInvalidPath(request.path, 'SSH workspace path must be POSIX absolute')
+    const sshHostManager = this.ctx.get('sshHostManager') as SshWorkspaceHostManager | undefined
+    if (sshHostManager === undefined) {
+      throw workspaceInvalidPath(request.path, 'SSH host manager is unavailable')
+    }
+    try {
+      const canonical = await sshHostManager.realpathDirectory(environment.hostId, request.path)
+      const workspaceEnvironment = { kind: 'ssh' as const, hostId: environment.hostId }
+      const existing = await this.ctx.workspaceRegistry.resolveByEnvironmentPath(canonical, workspaceEnvironment)
+      if (existing !== undefined) return { workspace: workspaceView(existing, this.ctx), created: false }
+      const workspace = await this.ctx.workspaceRegistry.createRemote(canonical, workspaceEnvironment)
+      return { workspace: workspaceView(workspace, this.ctx), created: true }
+    } catch (error) {
+      if (remoteErrorOf(error) !== undefined) throw error
+      throw workspaceInvalidPath(request.path, error)
+    }
+  }
 }
 
 function workspaceNotFound(workspaceId: WorkspaceId): RemoteError<'workspace/not-found'> {
@@ -249,4 +271,13 @@ function workspaceNotFound(workspaceId: WorkspaceId): RemoteError<'workspace/not
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function workspaceInvalidPath(path: string, error: unknown): RemoteError<'workspace/invalid-path'> {
+  return new RemoteError(
+    'workspace/invalid-path',
+    `cannot create a Workspace at "${path}": ${errorMessage(error)}`,
+    { path },
+    error instanceof Error ? { cause: error } : {},
+  )
 }

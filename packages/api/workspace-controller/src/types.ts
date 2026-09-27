@@ -6,9 +6,9 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionActivity, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { SessionActivity, SshHostId, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
-export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+export type { SshHostId, WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 export type {
   SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap,
 } from '@deepseek-ai/dsh-workspace/types'
@@ -19,6 +19,8 @@ export interface WorkspaceView {
   readonly workspaceId: WorkspaceId
   /** Canonical host directory path. */
   readonly path: string
+  /** Execution environment. Missing means the local host for legacy/client compatibility. */
+  readonly environment?: WorkspaceEnvironmentView
   /** User-visible title. */
   readonly title: string
   /** Sessions accounted to this Workspace in manual order. */
@@ -28,6 +30,11 @@ export interface WorkspaceView {
   /** ISO-8601 last-mutation instant. */
   readonly updatedAt: string
 }
+
+/** Browser-safe workspace execution location. */
+export type WorkspaceEnvironmentView =
+  | { readonly kind: 'local' }
+  | { readonly kind: 'ssh'; readonly hostId: SshHostId; readonly hostName?: string }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
@@ -64,6 +71,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 /** Existing directory requested for Workspace adoption. */
 export interface WorkspaceCreateRequest {
   readonly path: string
+  readonly environment?: WorkspaceEnvironmentView
 }
 
 /** Created or previously registered Workspace. */

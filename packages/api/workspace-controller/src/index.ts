@@ -103,7 +103,7 @@ export class WorkspaceController extends TypertRemoteService {
         this.config.documentsDirectory, AbortSignal.any([signal, timeout]),
       )
     })
-    return workspace === undefined ? undefined : { workspace: workspaceView(workspace) }
+    return workspace === undefined ? undefined : { workspace: workspaceView(workspace, this.ctx) }
   }
 
   /**

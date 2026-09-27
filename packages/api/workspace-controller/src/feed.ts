@@ -3,7 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Deque } from '@deepseek-ai/dsh-deque'
 import type { DomainChanged } from '@deepseek-ai/dsh-storage-domain'
-import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
+import type { Workspace, WorkspaceEnvironment, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
 import {
   workspaceDomainState,
   workspaceRecord,
@@ -11,19 +11,25 @@ import {
 } from '@deepseek-ai/dsh-workspace'
 import type {
   WorkspaceBaseline,
+  WorkspaceEnvironmentView,
   WorkspaceFollowFrame,
   WorkspaceView,
 } from './types.ts'
+
+interface SshHostProjectionProvider {
+  list(): readonly { readonly id: string; readonly name: string }[]
+}
 
 /**
  * Project one authoritative Workspace entity into its Remote value.
  * @param workspace - authoritative registry entity.
  * @returns detached Workspace projection for Remote consumers.
  */
-export function workspaceView(workspace: Workspace): WorkspaceView {
+export function workspaceView(workspace: Workspace, ctx?: Context): WorkspaceView {
   return {
     workspaceId: workspace.id,
     path: workspace.path,
+    ...environmentProjection(workspace.environment, ctx),
     title: workspace.title,
     sessionIds: [...workspace.sessionIds],
     createdAt: workspace.createdAt,
@@ -31,11 +37,12 @@ export function workspaceView(workspace: Workspace): WorkspaceView {
   }
 }
 
-function changedWorkspaceView(workspaceId: string, value: unknown): WorkspaceView {
+function changedWorkspaceView(workspaceId: string, value: unknown, ctx: Context): WorkspaceView {
   const record: WorkspaceRecord = workspaceRecord.parse(value)
   return {
     workspaceId: WorkspaceId(workspaceId),
     path: record.path,
+    ...environmentProjection(record.environment, ctx),
     title: record.title,
     sessionIds: [...record.sessionIds],
     createdAt: record.createdAt,
@@ -71,7 +78,7 @@ export class WorkspaceFeed {
    */
   baseline(): WorkspaceBaseline {
     return {
-      items: this.ctx.workspaceRegistry.list().map(workspaceView),
+      items: this.ctx.workspaceRegistry.list().map(workspace => workspaceView(workspace, this.ctx)),
       archivedSessionIds: [...this.ctx.workspaceRegistry.archivedSessionIds],
       pinnedSessionIds: [...this.ctx.workspaceRegistry.pinnedSessionIds],
     }
@@ -109,7 +116,7 @@ export class WorkspaceFeed {
           throw new Error(`committed Workspace registry references missing Workspace "${id}"`)
         }
         this.knownIds.add(id)
-        this.publish({ type: 'upsert', workspace: workspaceView(workspace) })
+        this.publish({ type: 'upsert', workspace: workspaceView(workspace, this.ctx) })
       }
       this.order = nextOrder
       if (orderChanged) this.publish({ type: 'order', workspaceIds: [...state.workspaceIds] })
@@ -134,13 +141,32 @@ export class WorkspaceFeed {
     if (!this.knownIds.has(change.key)) return
     this.publish({
       type: 'upsert',
-      workspace: changedWorkspaceView(change.key, change.value),
+      workspace: changedWorkspaceView(change.key, change.value, this.ctx),
     })
   }
 
   private publish(frame: Exclude<WorkspaceFollowFrame, { readonly type: 'baseline' }>): void {
     for (const follower of this.followers) follower.push(frame)
   }
+}
+
+function environmentProjection(
+  environment: WorkspaceEnvironment | undefined,
+  ctx: Context | undefined,
+): { readonly environment?: WorkspaceEnvironmentView } {
+  if (environment?.kind !== 'ssh') return {}
+  const hostName = sshHostProvider(ctx)?.list().find(host => host.id === environment.hostId)?.name
+  return {
+    environment: {
+      kind: 'ssh',
+      hostId: environment.hostId,
+      ...(hostName === undefined ? {} : { hostName }),
+    },
+  }
+}
+
+function sshHostProvider(ctx: Context | undefined): SshHostProjectionProvider | undefined {
+  return ctx?.get('sshHostManager') as SshHostProjectionProvider | undefined
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {
