@@ -98,6 +98,7 @@ export interface SshHostMount {
 
 export interface SshHostManager {
   list(): readonly SshHostView[]
+  state(id: SshHostId): SshHostView
   save(input: SshHostSaveInput): Promise<SshHostView>
   delete(id: SshHostId): Promise<void>
   test(id: SshHostId): Promise<SshHostView>

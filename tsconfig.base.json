@@ -99,6 +99,8 @@
       "@deepseek-ai/dsh-api-session-controller/remote-events": ["./packages/api/session-controller/src/remote-events.ts"],
       "@deepseek-ai/dsh-api-settings-controller": ["./packages/api/settings-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-settings-controller/types": ["./packages/api/settings-controller/src/types.ts"],
+      "@deepseek-ai/dsh-api-ssh-host-controller": ["./packages/api/ssh-host-controller/src/index.ts"],
+      "@deepseek-ai/dsh-api-ssh-host-controller/types": ["./packages/api/ssh-host-controller/src/types.ts"],
       "@deepseek-ai/dsh-api-workspace-controller": ["./packages/api/workspace-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/client": ["./packages/api/workspace-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/default-workspace": ["./packages/api/workspace-controller/src/default-workspace.ts"],

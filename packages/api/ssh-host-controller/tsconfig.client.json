@@ -1,0 +1,17 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "files": [
+    "src/types.ts"
+  ],
+  "references": [
+    { "path": "../../credentials/credentials" },
+    { "path": "../../host/directory-picker" },
+    { "path": "../../ssh/ssh-hosts" },
+    { "path": "../../typert/protocol" }
+  ]
+}

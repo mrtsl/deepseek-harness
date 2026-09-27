@@ -117,7 +117,7 @@ declare module '@deepseek-ai/cordis' {
 
 /** One non-reconnecting SSH session; loss invalidates all active operations. */
 export class SshConnection extends Service {
-  static Config: schema<Config> = schema.object({
+  static Config = schema.object({
     host: schema.string().required(), node: schema.string().required(), helper: schema.string().required(),
     helperHash: schema.string().required(), workspace: schema.string().required(),
     clientOptions: schema.array(schema.string()).default([]), batchMode: schema.boolean().default(true),
@@ -125,7 +125,7 @@ export class SshConnection extends Service {
     bootstrapPath: schema.string(), bootstrapHash: schema.string(),
     requestTimeoutMs: schema.number().default(30_000), maxFrameBytes: schema.number().default(64 * 1024 * 1024),
     maxPending: schema.number().default(128), leaseMs: schema.number().default(30_000),
-  })
+  }) as unknown as schema<Config>
 
   /** Verified remote helper coordinates; callers must await this before launch. */
   readonly ready: Promise<Hello>

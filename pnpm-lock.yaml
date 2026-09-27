@@ -1180,6 +1180,9 @@ importers:
       '@deepseek-ai/dsh-api-settings-controller':
         specifier: workspace:*
         version: link:../settings-controller
+      '@deepseek-ai/dsh-api-ssh-host-controller':
+        specifier: workspace:*
+        version: link:../ssh-host-controller
       '@deepseek-ai/dsh-api-terminal-controller':
         specifier: workspace:*
         version: link:../terminal-controller
@@ -1437,6 +1440,28 @@ importers:
       '@deepseek-ai/dsh-settings':
         specifier: workspace:*
         version: link:../../settings/settings
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:*
+        version: link:../../typert/protocol
+
+  packages/api/ssh-host-controller:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:~
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:*
+        version: link:../../credentials/credentials
+      '@deepseek-ai/dsh-host-directory-picker':
+        specifier: workspace:*
+        version: link:../../host/directory-picker
+      '@deepseek-ai/dsh-ssh-hosts':
+        specifier: workspace:*
+        version: link:../../ssh/ssh-hosts
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:*
         version: link:../../typert/protocol

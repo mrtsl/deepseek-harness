@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { SshHostRecord } from '../src/types.ts'
 import { buildOpenSshLaunchConfig, classifyOpenSshFailure } from '../src/launch-config.ts'
 
@@ -9,7 +10,7 @@ const baseRecord: SshHostRecord = {
   port: 22,
   username: 'alice',
   authMode: 'password',
-  passwordRef: 'SSH_LAB_PASSWORD',
+  passwordRef: credentialRef('SSH_LAB_PASSWORD'),
   defaultDirectory: '/home/alice',
   createdAt: '2026-09-27T00:00:00.000Z',
   updatedAt: '2026-09-27T00:00:00.000Z',
@@ -35,7 +36,9 @@ describe('OpenSSH launch config', () => {
   })
 
   it('keeps direct host entries strict and classifies host-key refusal diagnostics', () => {
-    const launch = buildOpenSshLaunchConfig({ ...baseRecord, authMode: 'automatic', passwordRef: undefined }, {})
+    const { passwordRef: _passwordRef, ...automaticRecord } = baseRecord
+    void _passwordRef
+    const launch = buildOpenSshLaunchConfig({ ...automaticRecord, authMode: 'automatic' }, {})
 
     expect(launch.config.host).toBe('alice@lab.local')
     expect(launch.config.batchMode).toBe(true)

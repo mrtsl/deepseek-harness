@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "files": [
+    "src/index.ts",
+    "src/directory-picker.ts",
+    "src/types.ts"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../credentials/credentials" },
+    { "path": "../../host/directory-picker" },
+    { "path": "../../ssh/ssh-hosts" },
+    { "path": "../../typert/protocol" }
+  ]
+}
