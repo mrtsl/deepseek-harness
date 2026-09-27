@@ -58,7 +58,16 @@ export type * from '@deepseek-ai/dsh-api-session-controller/types'
 export type {} from '@deepseek-ai/dsh-api-job-controller/remote'
 export type * from '@deepseek-ai/dsh-api-job-controller/types'
 export type {} from '@deepseek-ai/dsh-api-ssh-host-controller/remote'
-export type * from '@deepseek-ai/dsh-api-ssh-host-controller/types'
+export type {
+  SshDirectoryListingValue,
+  SshDirectoryListRequest,
+  SshHostAuthMode,
+  SshHostBaseline,
+  SshHostFollowFrame,
+  SshHostSaveRequest,
+  SshHostStatus,
+  SshHostValue,
+} from '@deepseek-ai/dsh-api-ssh-host-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
 export type * from '@deepseek-ai/dsh-api-workspace-controller/types'
 export type {} from '@deepseek-ai/dsh-api-workspace-files/remote'

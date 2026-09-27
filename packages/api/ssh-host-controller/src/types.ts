@@ -1,17 +1,11 @@
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
-import type {
-  SshHostAuthMode,
-  SshHostId,
-  SshHostStatus,
-} from '@deepseek-ai/dsh-ssh-hosts/types'
 
-export type {
-  SshHostAuthMode,
-  SshHostId,
-  SshHostStatus,
-} from '@deepseek-ai/dsh-ssh-hosts/types'
 export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+
+export type SshHostId = string
+export type SshHostAuthMode = 'automatic' | 'config' | 'key' | 'password'
+export type SshHostStatus = 'disconnected' | 'testing' | 'connecting' | 'connected' | 'failed'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
