@@ -7,6 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
+import { posix } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-persistence'
@@ -18,12 +19,12 @@ export { WorkspaceMoveInvalidError } from './entity.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath, realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
-import type { SessionActivity, Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
+import type { SessionActivity, Workspace, WorkspaceEnvironment, WorkspaceId as WorkspaceIdBrand } from './types.ts'
 
 export type {
-  SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace,
+  SessionActivity, SessionActivityItem, SessionActivityKind, SessionActivityKindMap, Workspace, WorkspaceEnvironment,
 } from './types.ts'
-export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
+export { workspaceDomainState, workspaceEnvironment, workspaceRecord, workspaceDomainSpec } from './spec.ts'
 export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 export { realpathNormalize } from './paths.ts'
 
@@ -239,6 +240,23 @@ export class WorkspaceRegistry extends Service {
       throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
     }
     return await this.enqueueOperation(() => this.createCanonical(canonical, title))
+  }
+
+  /**
+   * Create or reuse a workspace rooted on an SSH host. The path is validated
+   * as a remote POSIX absolute path and is not probed on the local Host.
+   * @param path - Canonical remote directory path.
+   * @param environment - SSH execution environment.
+   * @param title - Display title used only when a new record is created.
+   * @returns the existing or newly durable workspace.
+   */
+  async createRemote(
+    path: string,
+    environment: Extract<WorkspaceEnvironment, { kind: 'ssh' }>,
+    title?: string,
+  ): Promise<Workspace> {
+    const canonical = remoteWorkspacePath(path)
+    return await this.enqueueOperation(() => this.createCanonical(canonical, title, false, environment))
   }
 
   /**
@@ -498,25 +516,51 @@ export class WorkspaceRegistry extends Service {
    * @returns the workspace owning the canonical path, when one exists.
    */
   async resolveByPath(path: string): Promise<Workspace | undefined> {
-    const canonical = await realpathNormalize(path)
+    return await this.resolveByEnvironmentPath(path, undefined)
+  }
+
+  /**
+   * Resolve by canonical directory path and environment without creating or
+   * mutating a workspace. Local paths use Host `realpath`; SSH paths are only
+   * validated as POSIX absolute paths.
+   * @param path - Existing local directory or canonical remote directory.
+   * @param environment - Execution environment; absent and `{ kind: 'local' }`
+   * both mean the local Host.
+   * @returns the workspace owning that environment/path pair, when one exists.
+   */
+  async resolveByEnvironmentPath(
+    path: string,
+    environment?: WorkspaceEnvironment,
+  ): Promise<Workspace | undefined> {
+    const normalizedEnvironment = normalizedEnvironmentOf(environment)
+    const canonical = normalizedEnvironment?.kind === 'ssh'
+      ? remoteWorkspacePath(path)
+      : await realpathNormalize(path)
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (sameEnvironment(entity.environment, normalizedEnvironment) && entity.path === canonical) return entity
     }
     return undefined
   }
 
-  private async createCanonical(canonical: string, title?: string, firstUse = false): Promise<WorkspaceEntity> {
+  private async createCanonical(
+    canonical: string,
+    title?: string,
+    firstUse = false,
+    environment?: WorkspaceEnvironment,
+  ): Promise<WorkspaceEntity> {
+    const normalizedEnvironment = normalizedEnvironmentOf(environment)
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (sameEnvironment(entity.environment, normalizedEnvironment) && entity.path === canonical) return entity
     }
 
-    const workspaceName = title ?? defaultWorkspaceTitle(canonical)
+    const workspaceName = title ?? workspaceTitle(canonical, normalizedEnvironment)
     const table = this.requireTable()
     const state = this.requireState()
     const id = WorkspaceId(randomUUID())
     const now = new Date().toISOString()
     const record: WorkspaceRecord = {
       path: canonical,
+      ...(normalizedEnvironment === undefined ? {} : { environment: normalizedEnvironment }),
       title: workspaceName,
       sessionIds: [],
       createdAt: now,
@@ -666,12 +710,12 @@ export class WorkspaceRegistry extends Service {
     const byPath = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      byPath.set(record.path, id)
+      byPath.set(environmentPathKey(record.environment, record.path), id)
       for (const sessionId of record.sessionIds) accounted.set(sessionId, id)
     }
 
     for (const group of groups) {
-      let id = byPath.get(group.path)
+      let id = byPath.get(environmentPathKey(undefined, group.path))
       if (id === undefined) {
         const sessionIds = group.headers
           .map(header => header.id)
@@ -687,7 +731,7 @@ export class WorkspaceRegistry extends Service {
           updatedAt: createdAt,
         }
         await table.put(id, record)
-        byPath.set(group.path, id)
+        byPath.set(environmentPathKey(undefined, group.path), id)
         for (const sessionId of sessionIds) accounted.set(sessionId, id)
         continue
       }
@@ -710,12 +754,12 @@ export class WorkspaceRegistry extends Service {
       for (const sessionId of historical) accounted.set(sessionId, id)
     }
 
-    const groupRank = new Map(groups.map(group => [group.path, group.newestAt]))
+    const groupRank = new Map(groups.map(group => [environmentPathKey(undefined, group.path), group.newestAt]))
     const priorRank = new Map(state.workspaceIds.map((id, index) => [id, index]))
     const workspaceIds = [...table.entries()]
       .sort(([leftId, left], [rightId, right]) => {
-        const leftTime = groupRank.get(left.path) ?? Date.parse(left.createdAt)
-        const rightTime = groupRank.get(right.path) ?? Date.parse(right.createdAt)
+        const leftTime = groupRank.get(environmentPathKey(left.environment, left.path)) ?? Date.parse(left.createdAt)
+        const rightTime = groupRank.get(environmentPathKey(right.environment, right.path)) ?? Date.parse(right.createdAt)
         return rightTime - leftTime
           || (priorRank.get(leftId) ?? Number.MAX_SAFE_INTEGER)
             - (priorRank.get(rightId) ?? Number.MAX_SAFE_INTEGER)
@@ -761,14 +805,15 @@ export class WorkspaceRegistry extends Service {
     const paths = new Map<string, WorkspaceId>()
     const accounted = new Map<SessionId, WorkspaceId>()
     for (const [id, record] of table.entries()) {
-      const pathHolder = paths.get(record.path)
+      const pathKey = environmentPathKey(record.environment, record.path)
+      const pathHolder = paths.get(pathKey)
       if (pathHolder !== undefined) {
         throw new Error(
           `workspace domain is inconsistent: path '${record.path}' is claimed `
           + `by both workspace '${pathHolder}' and workspace '${id}'`,
         )
       }
-      paths.set(record.path, id)
+      paths.set(pathKey, id)
       for (const sessionId of record.sessionIds) {
         const holder = accounted.get(sessionId)
         if (holder !== undefined) {
@@ -897,5 +942,29 @@ export class WorkspaceRegistry extends Service {
 
 const sameSessionIds = (left: readonly SessionId[], right: readonly SessionId[]): boolean =>
   left.length === right.length && left.every((id, index) => id === right[index])
+
+const normalizedEnvironmentOf = (environment?: WorkspaceEnvironment): WorkspaceEnvironment | undefined =>
+  environment?.kind === 'ssh' ? environment : undefined
+
+const environmentKey = (environment?: WorkspaceEnvironment): string =>
+  environment?.kind === 'ssh' ? `ssh:${environment.hostId}` : 'local'
+
+const environmentPathKey = (environment: WorkspaceEnvironment | undefined, path: string): string =>
+  `${environmentKey(normalizedEnvironmentOf(environment))}\0${path}`
+
+const sameEnvironment = (left?: WorkspaceEnvironment, right?: WorkspaceEnvironment): boolean =>
+  environmentKey(normalizedEnvironmentOf(left)) === environmentKey(normalizedEnvironmentOf(right))
+
+function remoteWorkspacePath(path: string): string {
+  if (!posix.isAbsolute(path)) {
+    throw new TypeError(`SSH workspace path must be a POSIX absolute path: '${path}'`)
+  }
+  return path
+}
+
+function workspaceTitle(path: string, environment?: WorkspaceEnvironment): string {
+  if (environment?.kind === 'ssh') return posix.basename(path) || posix.parse(path).root
+  return defaultWorkspaceTitle(path)
+}
 
 export default WorkspaceRegistry

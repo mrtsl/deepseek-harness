@@ -15,6 +15,14 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
  */
 export type WorkspaceId = Branded<'WorkspaceId'>
 
+/** SSH host identity brand, structurally compatible with the SSH host package. */
+export type SshHostId = Branded<'SshHostId'>
+
+/** Workspace execution location. Missing environment on old records is local. */
+export type WorkspaceEnvironment =
+  | { readonly kind: 'local' }
+  | { readonly kind: 'ssh'; readonly hostId: SshHostId }
+
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
     /** No registration carries that Workspace identity. */
@@ -70,6 +78,9 @@ export interface Workspace {
    * afterwards, even when the directory disappears (see {@link status}).
    */
   readonly path: string
+
+  /** Execution location. `undefined` is the legacy/local default. */
+  readonly environment: WorkspaceEnvironment | undefined
 
   /** Display title. Defaults to the final path segment, or a filesystem root's own spelling; duplicates are allowed. */
   readonly title: string

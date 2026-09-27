@@ -12,7 +12,7 @@ import { stat } from 'node:fs/promises'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type { WorkspaceRecord } from './spec.ts'
-import type { Workspace, WorkspaceId } from './types.ts'
+import type { Workspace, WorkspaceEnvironment, WorkspaceId } from './types.ts'
 import { realpathNormalize } from './paths.ts'
 
 /** An insertSessionBefore request named a session or anchor not on the account (storage failures stay plain errors). */
@@ -84,6 +84,10 @@ export class WorkspaceEntity implements Workspace {
 
   get path(): string {
     return this.record.path
+  }
+
+  get environment(): WorkspaceEnvironment | undefined {
+    return this.record.environment
   }
 
   get title(): string {
@@ -178,6 +182,7 @@ export class WorkspaceEntity implements Workspace {
   }
 
   async status(): Promise<'ok' | 'missing-dir'> {
+    if (this.record.environment?.kind === 'ssh') return 'ok'
     try {
       return (await stat(this.record.path)).isDirectory() ? 'ok' : 'missing-dir'
     } catch {

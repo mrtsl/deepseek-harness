@@ -20,9 +20,10 @@ import WorkspaceRegistry, {
   WorkspaceOrderInvalidError,
 } from '../src/index.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from '../src/index.ts'
+import type { SshHostId, WorkspaceEnvironment } from '../src/types.ts'
 import { defaultWorkspaceTitle, fullyQualifiedWorkspacePath } from '../src/paths.ts'
 
-const DOMAIN_VERSION = 2
+const DOMAIN_VERSION = 3
 
 const header = (id: string, cwd?: string, createdAt = 0): SessionHeader => ({
   version: SESSION_FORMAT_VERSION,
@@ -136,10 +137,16 @@ function selectiveFailureBackend(
   }
 }
 
-function record(path: string, sessionIds: string[], createdAt = '2026-07-24T00:00:00.000Z'): WorkspaceRecord {
+function record(
+  path: string,
+  sessionIds: string[],
+  createdAt = '2026-07-24T00:00:00.000Z',
+  environment?: WorkspaceEnvironment,
+): WorkspaceRecord {
   return {
     path,
     title: basename(path),
+    ...(environment === undefined ? {} : { environment }),
     sessionIds: sessionIds.map(SessionId),
     createdAt,
     updatedAt: createdAt,
@@ -393,6 +400,60 @@ describe('WorkspaceRegistry create and lookup', () => {
     expect(storedState(pool).workspaceIds).toEqual([second.id, first.id])
     expect(await registry.resolveByPath(alias)).toBe(first)
     expect(await registry.resolveByPath(await makeDir('unowned'))).toBeUndefined()
+  })
+
+  it('treats records without an environment as local records', async () => {
+    const dir = await makeDir('legacy-local-environment')
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000101')
+    const result = await harness({
+      pool: storedPool(
+        [[id, record(dir, [])]],
+        { initialized: true, workspaceIds: [id] },
+      ),
+    })
+
+    const workspace = result.registry.get(id)!
+    expect(workspace.environment).toBeUndefined()
+    await expect(result.registry.resolveByEnvironmentPath(dir, { kind: 'local' })).resolves.toBe(workspace)
+  })
+
+  it('preserves SSH workspace environments across restart', async () => {
+    const id = WorkspaceId('00000000-0000-4000-8000-000000000102')
+    const environment: WorkspaceEnvironment = { kind: 'ssh', hostId: 'host-1' as SshHostId }
+    const result = await harness({
+      pool: storedPool(
+        [[id, record('/home/alice/repo', [], '2026-07-24T00:00:00.000Z', environment)]],
+        { initialized: true, workspaceIds: [id] },
+      ),
+    })
+
+    const workspace = result.registry.get(id)!
+    expect(workspace.environment).toEqual(environment)
+    await expect(result.registry.resolveByEnvironmentPath('/home/alice/repo', environment)).resolves.toBe(workspace)
+    await expect(result.registry.resolveByEnvironmentPath('/home/alice/repo')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('creates SSH workspaces without requiring the remote path to exist locally', async () => {
+    const { registry, pool } = await harness()
+    const environment: WorkspaceEnvironment = { kind: 'ssh', hostId: 'host-1' as SshHostId }
+
+    const workspace = await registry.createRemote('/home/alice/missing-here', environment, 'Repo')
+
+    expect(workspace.path).toBe('/home/alice/missing-here')
+    expect(workspace.title).toBe('Repo')
+    expect(workspace.environment).toEqual(environment)
+    expect(storedRecord(pool, workspace.id)).toMatchObject({ path: '/home/alice/missing-here', environment })
+    await expect(registry.resolveByEnvironmentPath('/home/alice/missing-here', environment)).resolves.toBe(workspace)
+  })
+
+  it('rejects non-POSIX SSH workspace paths', async () => {
+    const { registry } = await harness()
+    const environment: WorkspaceEnvironment = { kind: 'ssh', hostId: 'host-1' as SshHostId }
+
+    await expect(registry.createRemote('repo', environment)).rejects.toThrow(/POSIX absolute/)
+    await expect(registry.createRemote('C:\\repo', environment)).rejects.toThrow(/POSIX absolute/)
+    await expect(registry.resolveByEnvironmentPath('repo', environment)).rejects.toThrow(/POSIX absolute/)
+    expect(registry.list()).toEqual([])
   })
 
   it('serializes concurrent same-path creates into one entity', async () => {
